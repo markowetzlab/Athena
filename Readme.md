@@ -24,4 +24,4 @@ Opencl is crucial to the functionality of this software package. How you install
 
 Once Opencl and pyopencl are both installed can you install athena using pip:
 
-    pip install athena
+    pip install athenasc

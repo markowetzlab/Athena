@@ -1,0 +1,20 @@
+Metadata-Version: 2.1
+Name: athena
+Version: 0.1
+Summary: Athena - Single Cell Crispr Simulator for experimental and analysis pipeline design
+Author: Alexander Baker
+Author-email: alexander.baker@cruk.cam.ac.uk
+License: UNKNOWN
+Keywords: systems,biology,model
+Platform: UNKNOWN
+Classifier: Development Status :: 5 - Production/Stable
+Classifier: Environment :: Console
+Classifier: Intended Audience :: Science/Research
+Classifier: License :: OSI Approved :: BSD License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Topic :: Scientific/Engineering :: Bio-Informatics
+License-File: LICENSE.txt
+
+UNKNOWN
+
