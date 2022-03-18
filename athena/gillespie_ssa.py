@@ -202,7 +202,7 @@ class GillespieSSA:
     def get_gpu_context(self):
         context = cl.create_some_context(True)
         
-        with open('utils.cl', 'r') as file:
+        with open(os.path.join(os.path.dirname(__file__), 'utils.cl'), 'r') as file:
             code = file.read()
             
         program = cl.Program(context, code).build(
