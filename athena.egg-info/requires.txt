@@ -1,8 +1,0 @@
-numba
-scipy
-pandas
-igraph
-tqdm
-loompy
-scanpy
-requests

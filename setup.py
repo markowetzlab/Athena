@@ -1,6 +1,6 @@
 from setuptools import setup, find_packages
 
-setup(name='athena',
+setup(name='athenasc',
       version='0.01',
       description='Athena - Single Cell Crispr Simulator for experimental and analysis pipeline design',
       author='Alexander Baker',
