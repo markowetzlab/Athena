@@ -97,10 +97,6 @@ class Athena(Network, Kinetics, GuideRNA, CompileReactions, GillespieSSA, Sampli
             pickle.dump(self, file)
     
     def initiate_opencl(self, nbatches, context, opencl_root):
-        
-        if nbatches % 2 != 0:
-            nbatches += 1
-            
         self.nbatches = nbatches
         self.opencl_root = opencl_root
         

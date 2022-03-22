@@ -46,14 +46,15 @@ class GuideRNA:
         
         nrows = len(multiplier)
         multiplier.columns = "transcription_" + multiplier.columns.values
-        self.nsims_per_device = (self.nsims_per_condition * nrows) // self.nbatches
         multi = [multiplier.iloc[i,] for i in range(nrows) for sim_i in range(self.nsims_per_condition)]
         
         self.multiplier = pd.concat(multi)
         self.multiplier_df = pd.DataFrame(multi)
+        self.calc_sims_per_device(nrows)
+        
         self.multiplier_df.index = self.multiplier_df.index.set_names('grna_label')
         self.multiplier_df.to_csv(os.path.join(self.metadata_dir, 'multiplier.csv'))
-    
+        
     def get_perturbed_genes(self, grna_names):
         perturbed_genes = []
         
@@ -212,3 +213,14 @@ class GuideRNA:
                 ko_combos[col] = gene_on_target
 
         return round(np.prod(ko_combos), 2)
+    
+    def calc_sims_per_device(self, nrows):
+        nsims = 0
+        total_sims = self.nsims_per_condition * nrows
+        
+        while nsims != total_sims:
+            self.nsims_per_device = (self.nsims_per_condition * nrows) // self.nbatches
+            nsims = self.nsims_per_device * self.nbatches
+
+            if nsims != total_sims:
+                self.nbatches += 1
