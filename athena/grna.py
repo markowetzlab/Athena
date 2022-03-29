@@ -2,6 +2,7 @@ import os
 import random
 import pandas as pd
 from tqdm import tqdm
+import itertools as it
 
 class GuideRNA:
     
@@ -13,13 +14,14 @@ class GuideRNA:
         
         grna_names = ctrl_grnas + gene_grnas
         self.ngrnas = len(grna_names)
+        
         grna_meta = self.get_perturbed_genes(grna_names)
         grna_meta = self.sample_on_target(grna_meta)
         
         self.grna_meta = pd.DataFrame(grna_meta)
         
         if self.crispr_type == 'activation':
-            self.grna_meta['on_target'] = self.grna_meta['on_target'] + 1
+            self.grna_meta['on_target'] = (1 - self.grna_meta['on_target']) + 1
         
         self.create_multiplier_matrix()
     
@@ -45,15 +47,23 @@ class GuideRNA:
             self.sim_meta = pd.DataFrame({'sim_name': multiplier.index, 'grna': multiplier.index, 'sample_percent': 1})
         
         nrows = len(multiplier)
-        multiplier.columns = "transcription_" + multiplier.columns.values
-        multi = [multiplier.iloc[i,] for i in range(nrows) for sim_i in range(self.nsims_per_condition)]
-        
-        self.multiplier = pd.concat(multi)
-        self.multiplier_df = pd.DataFrame(multi)
         self.calc_sims_per_device(nrows)
+        self.multiplier = {"feature_id": [], "perturbation": [], "grna": [], "sim_i": []}
         
-        self.multiplier_df.index = self.multiplier_df.index.set_names('grna_label')
-        self.multiplier_df.to_csv(os.path.join(self.metadata_dir, 'multiplier.csv'))
+        for i in range(nrows):
+            adjust_interval = 1 + i * self.nsims_per_condition
+            grna = multiplier.index.values[i]
+            perturb_vec = list(multiplier.iloc[i].T.values)
+            
+            for sim_i in range(self.nsims_per_condition):
+                sim_i += adjust_interval
+                feature = list(multiplier.columns.values + f"_{sim_i}") 
+                self.multiplier["feature_id"] = self.multiplier["feature_id"] + feature
+                self.multiplier["grna"] = self.multiplier["grna"] + [grna] * len(feature)
+                self.multiplier["sim_i"] = self.multiplier["sim_i"] + [sim_i] * len(feature)
+                self.multiplier["perturbation"] = self.multiplier["perturbation"] + perturb_vec
+                
+        self.multiplier = pd.DataFrame(self.multiplier)
         
     def get_perturbed_genes(self, grna_names):
         perturbed_genes = []
@@ -66,7 +76,7 @@ class GuideRNA:
             else:
                 target_gene = grna.split('-grna')[0]
                 sampled_genes = self.sample_off_target(target_gene, grna)
-                sampled_genes.append({'grna': grna, 'perturbed_gene': target_gene, 'on_target': self.on_target / 100, 'target': True})
+                sampled_genes.append({'grna': grna, 'perturbed_gene': target_gene, 'on_target': self.on_target, 'target': True})
             
             perturbed_genes = perturbed_genes + sampled_genes
         
@@ -184,12 +194,20 @@ class GuideRNA:
 
             if ctrl_label in rowname:
                 sample_perc.append(1)
+                
             elif ngenes == 1:
                 if 'PRT' in rowname:
-                    grna.on_target.values[0]
-                    sample_perc.append(grna.on_target.values[0])
+                    if grna.on_target.values[0]== 0:
+                        sample_perc.append(1)
+                    else:
+                        sample_perc.append(grna.on_target.values[0])
+                    
                 else:
-                    sample_perc.append(1 - grna.on_target.values[0])
+                    if grna.on_target.values[0]== 0:
+                        sample_perc.append(0)
+                    else:
+                        sample_perc.append(1 - grna.on_target.values[0])
+                
             else:
                 perc = self.multiple_genes_percentage(grna, multiplier, row_i)
                 sample_perc.append(perc)

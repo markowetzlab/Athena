@@ -10,10 +10,12 @@ class Sampling:
     
     def sample(self, ncells=10000, pop_fp=None, cache=True):
         print ("Sampling Cells...")
-        cells_meta, gene_expr, cells = self.sampling_cells(ncells)
+        cells_meta, gene_expr = self.sampling_cells(ncells)
         print ("Sampling Molecules...")
-        gene_expr = self.sampling_molecules(gene_expr, pop_fp)
-        gene_expr['cells'] = cells
+        gene_expr, lib_sizes = self.sampling_molecules(gene_expr, pop_fp)
+        
+        cells_meta = self.clean_cells_metadata(cells_meta, lib_sizes)
+        cells_meta = cells_meta.reset_index(drop=True)
         
         if cache:
             print ("Caching....")
@@ -32,10 +34,10 @@ class Sampling:
 
         cells_meta = []
         cells = np.array([i for i in range(max_cells)])
-        sims = (cells // ncells_from_sim).astype(int)
+        sims = (cells // ncells_from_sim).astype(int) + 1
 
         for sim, cell in tqdm(zip(sims, cells)):
-            grna_label = self.multiplier_df.index[sim]
+            grna_label = self.multiplier['grna'].loc[self.multiplier.sim_i == sim].unique()[0]
             cells_meta.append({"cell_label": f"cell_{cell}", "sim_label": grna_label, "cell_i": cell,
                                "sim_i": sim, "fp": os.path.join(self.results_dir, f'simulation_{sim}.csv')})
         
@@ -49,8 +51,8 @@ class Sampling:
         cells_meta = cells_meta.iloc[cells]
         gene_expr = self.collapse_molecules(cells)
         
-        return cells_meta, gene_expr, cells
-        
+        return cells_meta, gene_expr
+    
     def sampling_molecules(self, gene_expr, pop_fp=None):
         
         if pop_fp is None:
@@ -66,8 +68,23 @@ class Sampling:
         downsampled_counts = self.downsampling(simcounts_cpm, lib_size)
         gene_expr = pd.DataFrame(downsampled_counts, columns=gene_expr.columns)
         
-        return gene_expr
+        return gene_expr, lib_size
+    
+    def clean_cells_metadata(self, meta, lib_sizes):
+        meta['lib_size'] = lib_sizes
+        meta['grna'] = meta['sim_label'].apply(lambda x: "_".join(x.split('_')[0:2]))
+        meta['target_gene'] = meta['sim_label'].apply(lambda x: x.split('-grna')[0])
         
+        if self.crispr_type == 'knockout':
+            meta['is_cell_perturbed'] = meta['sim_label'].apply(lambda x: x.split('_')[-1])
+            meta.loc[meta.target_gene == self.ctrl_label, 'is_cell_perturbed'] = self.ctrl_label
+        else:
+            meta['is_cell_perturbed'] = 'PRT'
+            meta.loc[meta.target_gene == self.ctrl_label, 'is_cell_perturbed'] = self.ctrl_label
+        
+        meta = meta.reset_index(drop=True)
+        return meta
+    
     def collapse_molecules(self, sampled_cells):
         df = pd.read_csv(os.path.join(self.results_dir, 'simulated_counts.csv'))
         df = df.sort_values(by=['sim_i'])
@@ -136,8 +153,9 @@ class Sampling:
             row = self.sim_meta.iloc[row_i]
             sim_cells = cells_meta.loc[cells_meta.sim_label == row.sim_name, 'cell_i'].values
             
-            n = int(ncells * row.sample_percent)
-            sampled = random.choices(sim_cells, k=n)
-            sampled_cells = sampled_cells + sampled
+            if row.sample_percent != 0:
+                n = int(ncells * row.sample_percent)
+                sampled = random.choices(sim_cells, k=n)
+                sampled_cells = sampled_cells + sampled
         
         return sampled_cells

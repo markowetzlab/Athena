@@ -30,12 +30,9 @@ class CompileReactions:
         
         print (f"Starting to Processing Batch {device_i}...")
         noise_info, noise_network, regulators = self.create_duplicates(device_i)
-
-        start = device_i * len(noise_info)
-        end = start + len(noise_info)
         
         species_vec = self.create_species_vector(noise_info, device_i)
-        propensity = self.create_propensity_matrix(noise_info, self.multiplier.iloc[start:end], species_vec, file)
+        propensity = self.create_propensity_matrix(noise_info, species_vec, file)
         affinity = self.create_affinity_matrix(noise_network, propensity, species_vec)
         change_vec = self.create_change_vector(noise_info, propensity, species_vec)
         
@@ -57,6 +54,8 @@ class CompileReactions:
         noise_network['to'] = noise_network['to'] + '_' + noise_network['sim_i'].astype(str)
         noise_network['from'] = noise_network['from'] + '_' + noise_network['sim_i'].astype(str)
         noise_info['feature_id'] = noise_info['feature_id'] + '_' + noise_info['sim_i'].astype(str)
+        noise_info = self.get_perturbation(noise_info)
+        
         
         noise_info = self.inject_rate_noise(noise_info)
         noise_info, regulators = self.get_reactions_regulators(noise_network, noise_info)
@@ -106,7 +105,7 @@ class CompileReactions:
         
         return species_state
     
-    def create_propensity_matrix(self, feature_info, perturb_vec, species_vec, file):
+    def create_propensity_matrix(self, feature_info, species_vec, file):
         # need to add reversible reaction for dephosphorlyation
         propensity_dfs = []
         phosphos = feature_info.loc[feature_info.is_phosphorylated, ]
@@ -128,14 +127,15 @@ class CompileReactions:
             if reaction == 'transcription_':
                 reaction_type = 1
                 species_needed = 'None'
-                perturbation = perturb_vec.values
                 basal = feature_info.basal.values
                 reaction_rates = feature_info[col].values
                 nregulators = feature_info.nregulators.values
                 effects_sums = feature_info.effects_sums.values
                 independence = feature_info.independence.values
+                perturbation = feature_info.perturbation.values
                 base_activity = feature_info.base_activity.values
                 reacts = reaction + feature_info.feature_id.values
+                
             elif 'phospho' in col:
                 if 'protein_decay' in col:
                     col = 'protein_decay_rate'
@@ -297,3 +297,10 @@ class CompileReactions:
         # removing unnecessary columns
         feature_info.drop(columns=['regulators'], inplace=True)
         return feature_info, regulators
+    
+    def get_perturbation(self, noise_info):
+        key_cols = ['feature_id', 'perturbation']
+        sim_indices = noise_info.sim_i.unique()
+        multi = self.multiplier.loc[self.multiplier.sim_i.isin(sim_indices), key_cols]
+        
+        return noise_info.merge(multi, on='feature_id')

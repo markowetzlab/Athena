@@ -53,7 +53,7 @@ class Athena(Network, Kinetics, GuideRNA, CompileReactions, GillespieSSA, Sampli
                  save_burn=False,
                  save_protein=False,
                  ncells_per_condition=10000,
-                 collapse_mrna=False,
+                 collapse_mrna=True,
                  map_reference_ls=True,
                  map_reference_cpm=True,
                  simulator_dir='athena',
@@ -225,7 +225,7 @@ class Athena(Network, Kinetics, GuideRNA, CompileReactions, GillespieSSA, Sampli
         if (type(target_genes) is list) and (len(target_genes) != 0):
             self.target_genes = target_genes
         
-        if (not on_target is None) and (type(on_target) is int):
+        if (not on_target is None) and (type(on_target) is float):
             self.on_target = on_target
         
         if (not off_target is None) and (type(off_target) is int):

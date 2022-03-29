@@ -29,7 +29,6 @@ class GillespieSSA:
             cache_species = species_vec.iloc[result_index]
             
             for time_index in tqdm(time_span):
-                # ntime_left = len(time_span[index:])
                 # calculate affinites and propensities
                 affinities = self.calc_affinities(program, queue, aff_params, species_array, affinities)
                 propensity_vec = self.calc_propensities(program, queue, prop_params, propensities, affinities, species_array)
