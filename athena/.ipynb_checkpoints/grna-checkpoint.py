@@ -6,7 +6,10 @@ import itertools as it
 
 class GuideRNA:
     
-    def generate_grnas(self):
+    def generate_grnas(self, crispr_type=None):
+        
+        self.check_crispr_type(crispr_type)
+        
         self.get_target_genes()
         ngrnas_seq = range(self.ngrnas_per_target)
         ctrl_grnas = [f'{self.ctrl_label}-grna.{i + 1}' for i in ngrnas_seq]
@@ -242,3 +245,15 @@ class GuideRNA:
 
             if nsims != total_sims:
                 self.nbatches += 1
+    
+    def check_crispr_type(self, crispr_type):
+        
+        try:
+            crispr_type = crispr_type.lower()
+            if crispr_type in ['interference', 'activation', 'knockout']:
+                self.crispr_type = crispr_type
+            else:
+                raise Exception("crispr_type parameter must be either: activation, interference, or knockout...")
+        except:
+            if self.crispr_type is None:
+                raise Exception("crispr_type parameter must be either: activation, interference, or knockout...")

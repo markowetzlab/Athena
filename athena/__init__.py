@@ -38,7 +38,7 @@ class Athena(Network, Kinetics, GuideRNA, CompileReactions, GillespieSSA, Sampli
                  on_target=None,
                  off_target=None,
                  ctrl_label='CTRL',
-                 crispr_type='Interference',
+                 crispr_type=None,
                  ngrnas_per_target=3,
                  grna_library=None,
                  tau=0.05,
@@ -198,13 +198,18 @@ class Athena(Network, Kinetics, GuideRNA, CompileReactions, GillespieSSA, Sampli
     def check_grna_parameters(self, target_genes, perturb_tfs, perturb_kinases, on_target, off_target, ngrnas_per_target, ctrl_label, crispr_type, grna_library):
         genes = []
         self.target_genes = []
-        crispr_type = crispr_type.lower()
         self.on_target, self.off_target = None, None
         self.perturb_tfs, self.perturb_kinases = False, False
         grna_libraries = os.listdir(self.grna_libraries_dir)
         
-        if crispr_type in ['interference', 'activation', 'knockout']:
-            self.crispr_type = crispr_type
+        try:
+            crispr_type = crispr_type.lower()
+            if crispr_type in ['interference', 'activation', 'knockout']:
+                self.crispr_type = crispr_type
+            else:
+                raise Exception("crispr_type parameter must be either: activation, interference, or knockout...")
+        except:
+            self.crispr_type = None
         
         if grna_library in grna_libraries:
             self.grna_library_name = grna_library
