@@ -19,19 +19,40 @@ class Network(ModularSampling, GeneRegulatoryNetwork, HouseKeeping, SignallingCa
             net_dfs, self.tfs, self.kinases, self.phosphorylated = [], [], [], []
             
             # load the GRN and extract the transcription factor network
+            if self.verbose:
+                print ("Sampling GRN...")
+            
             self.create_grn()
+            
+            if self.verbose:
+                print ("GRN Created...")
+                
             net_dfs.append(self.get_edgelist_df(self.tf_egene_net))
             self.tfs = [f'TF_{i}' for i in range(self.num_tfs)]
             
             if self.nkinases != 0:
+                if self.verbose:
+                    print ("Sampling Signalling Cascades...")
+                
                 self.create_signalling_cascades()
+                
+                if self.verbose:
+                    print ("Finished Sampling Cascades...")
+                
                 kinase_df = self.get_edgelist_df(self.kinases)
                 self.phosphorylated = set(list(kinase_df.target.unique()) + list(kinase_df.source.unique()))
                 self.kinases = [kinase for kinase in self.phosphorylated if not kinase in self.tfs]
                 net_dfs.append(kinase_df)
                 
             if self.num_hks != 0:
+                if self.verbose:
+                    print ("Sampling HouseKeeping Network...")
+                    
                 self.create_hks()
+                
+                if self.verbose:
+                    print ("Sampled HouseKeeping Network...")
+                    
                 hk_df = self.get_edgelist_df(self.hks)
                 self.hks = list(hk_df.source.unique()) + list(hk_df.target.unique())
                 net_dfs.append(hk_df)

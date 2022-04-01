@@ -1,5 +1,6 @@
 import os
 import glob
+import pickle
 import random
 import shutil
 import zipfile
@@ -118,7 +119,7 @@ class Athena(Network, Kinetics, GuideRNA, CompileReactions, GillespieSSA, Sampli
         self.regulators_dir = os.path.join(self.simulator_dir, 'regulators')
         self.species_vec_dir = os.path.join(self.simulator_dir, 'species_vec')
         
-        if not os.path.isdir(self.simulator_dir):
+        if not os.path.exists(self.simulator_dir):
             os.mkdir(self.simulator_dir)
             os.mkdir(self.logs_dir)
             os.mkdir(self.results_dir)
@@ -133,7 +134,7 @@ class Athena(Network, Kinetics, GuideRNA, CompileReactions, GillespieSSA, Sampli
         else:
             for root, dirs, files in os.walk(self.simulator_dir):
                 
-                if root == self.metadata_dir:
+                if os.path.exists(self.metadata_dir) and root == self.metadata_dir:
                     continue
                 
                 for file in files:
@@ -235,12 +236,6 @@ class Athena(Network, Kinetics, GuideRNA, CompileReactions, GillespieSSA, Sampli
         
         if (not off_target is None) and (type(off_target) is int):
             self.off_target = off_target
-            
-        if self.off_target is None:
-            self.off_target = random.choices(self.grna_library.off_target, weights=probs, k=1)[0]
-        
-        if self.on_target is None:
-            self.on_target = random.choices(self.grna_library.on_target, weights=probs, k=1)[0]
         
         if ngrnas_per_target < 0:
             ngrnas_per_target = 1

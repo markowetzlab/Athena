@@ -6,11 +6,12 @@ import itertools as it
 
 class GuideRNA:
     
-    def generate_grnas(self, crispr_type=None):
+    def generate_grnas(self, crispr_type=None, on_target=None, off_target=None):
         
         self.check_crispr_type(crispr_type)
         
         self.get_target_genes()
+        self.check_target_scores(on_target, off_target)
         ngrnas_seq = range(self.ngrnas_per_target)
         ctrl_grnas = [f'{self.ctrl_label}-grna.{i + 1}' for i in ngrnas_seq]
         gene_grnas = [f'{gene}-grna.{i + 1}' for gene in self.target_genes for i in ngrnas_seq]
@@ -257,3 +258,17 @@ class GuideRNA:
         except:
             if self.crispr_type is None:
                 raise Exception("crispr_type parameter must be either: activation, interference, or knockout...")
+                
+    def check_target_scores(self, on_target, off_target):
+        
+        if (not on_target is None) and (type(on_target) is float):
+            self.on_target = on_target
+        
+        if (not off_target is None) and (type(off_target) is int):
+            self.off_target = off_target
+        
+        if self.off_target is None:
+            self.off_target = random.choices(self.grna_library.off_target, weights=probs, k=1)[0]
+        
+        if self.on_target is None:
+            self.on_target = random.choices(self.grna_library.on_target, weights=probs, k=1)[0]
