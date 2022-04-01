@@ -20,24 +20,24 @@ class Network(ModularSampling, GeneRegulatoryNetwork, HouseKeeping, SignallingCa
             
             # load the GRN and extract the transcription factor network
             if self.verbose:
-                print ("Sampling GRN...")
+                print (f"Sampling GRN: {self.network_name}")
             
             self.create_grn()
             
             if self.verbose:
-                print ("GRN Created...")
+                print (f"GRN Created: {self.network_name}")
                 
             net_dfs.append(self.get_edgelist_df(self.tf_egene_net))
             self.tfs = [f'TF_{i}' for i in range(self.num_tfs)]
             
             if self.nkinases != 0:
                 if self.verbose:
-                    print ("Sampling Signalling Cascades...")
+                    print (f"Sampling Signalling Cascades: {self.network_name}")
                 
                 self.create_signalling_cascades()
                 
                 if self.verbose:
-                    print ("Finished Sampling Cascades...")
+                    print (f"Finished Sampling Cascades: {self.network_name}")
                 
                 kinase_df = self.get_edgelist_df(self.kinases)
                 self.phosphorylated = set(list(kinase_df.target.unique()) + list(kinase_df.source.unique()))
@@ -46,12 +46,12 @@ class Network(ModularSampling, GeneRegulatoryNetwork, HouseKeeping, SignallingCa
                 
             if self.num_hks != 0:
                 if self.verbose:
-                    print ("Sampling HouseKeeping Network...")
+                    print (f"Sampling HouseKeeping Network: {self.network_name}")
                     
                 self.create_hks()
                 
                 if self.verbose:
-                    print ("Sampled HouseKeeping Network...")
+                    print (f"Sampled HouseKeeping Network: {self.network_name}")
                     
                 hk_df = self.get_edgelist_df(self.hks)
                 self.hks = list(hk_df.source.unique()) + list(hk_df.target.unique())

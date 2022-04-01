@@ -68,6 +68,7 @@ class Athena(Network, Kinetics, GuideRNA, CompileReactions, GillespieSSA, Sampli
         self.ncpus = ncpus
         self.verbose = verbose
         self.cache_network = cache_network
+        self.network_name = os.path.basename(simulator_dir)
         self.initiate_opencl(nbatches, opencl_context, opencl_root)
         
         print ("Check the caches...")
