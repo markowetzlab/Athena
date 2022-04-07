@@ -11,7 +11,10 @@ class SignallingCascade:
         sampled_egenes = []
         
         if self.verbose:
-            print ("Sampling Signalling Cascades...")
+            print ("Sampling Signalling Cascades...", flush=True)
+            
+        if self.ppi.vcount() <= self.num_kinases:
+            raise Exception("Number of Tfs is Larger than the GRN Provided.", flush=True)
         
         for nsize in self.cascade_sizes:
             sampled_nodes = self.sample_kinases(nsize)

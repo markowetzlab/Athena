@@ -9,16 +9,16 @@ from multiprocessing import Pool, RLock
 class Sampling:
     
     def sample(self, ncells=10000, pop_fp=None, cache=True):
-        print ("Sampling Cells...")
+        print (f"Simulation: {self.network_name} Sampling Cells...", flush=True)
         cells_meta, gene_expr = self.sampling_cells(ncells)
-        print ("Sampling Molecules...")
+        print (f"Simulation: {self.network_name} Sampling Molecules...", flush=True)
         gene_expr, lib_sizes = self.sampling_molecules(gene_expr, pop_fp)
         
         cells_meta = self.clean_cells_metadata(cells_meta, lib_sizes)
         cells_meta = cells_meta.reset_index(drop=True)
         
         if cache:
-            print ("Caching....")
+            print (f"Simulation: {self.network_name} Caching....", flush=True)
             cells_meta.to_csv(os.path.join(self.metadata_dir, 'cells_metadata.csv'), index=False)
             gene_expr.to_csv(os.path.join(self.metadata_dir, 'gene_expression.csv'), index=False)
         
@@ -29,18 +29,20 @@ class Sampling:
         max_cells = int((self.sim_meta.shape[0] * self.nsims_per_condition) * ncells_from_sim)
         
         if ncells > max_cells:
-            raise Exception("Number of cells requested is greater than the number of cells simulated. Sample fewer cells...")
+            raise Exception(f"Simulation: {self.network_name} Number of cells requested is greater than the number of cells simulated. Sample fewer cells...")
         
 
         cells_meta = []
         cells = np.array([i for i in range(max_cells)])
         sims = (cells // ncells_from_sim).astype(int) + 1
+        multi = pd.read_parquet(self.multiplier_fp)
 
         for sim, cell in tqdm(zip(sims, cells)):
-            grna_label = self.multiplier['grna'].loc[self.multiplier.sim_i == sim].unique()[0]
+            grna_label = multi['grna'].loc[multi.sim_i == sim].unique()[0]
             cells_meta.append({"cell_label": f"cell_{cell}", "sim_label": grna_label, "cell_i": cell,
                                "sim_i": sim, "fp": os.path.join(self.results_dir, f'simulation_{sim}.csv')})
         
+        del multi
         cells_meta = pd.DataFrame(cells_meta)
         
         if self.crispr_type == 'knockout':
@@ -93,7 +95,7 @@ class Sampling:
         df = df.drop(columns=['sim_i'])
         
         if self.collapse_mrna:
-            spec = pd.read_csv(os.path.join(self.species_vec_dir, 'batch_0.csv'))
+            spec = pd.read_parquet(os.path.join(self.species_vec_dir, 'batch_0.parquet'))
             spec = spec.drop(columns=['species', 'state', 'sim_i'])
             spec = spec.loc[spec.molecule_type != 'protein', ]
             spec = spec.drop_duplicates(subset=['spec_name'])

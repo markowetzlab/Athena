@@ -31,8 +31,8 @@ class Kinetics:
         print ("Initialized Kinetics...")
         
         if self.cache_network:
-            self.feature_info.to_csv(os.path.join(self.metadata_dir, 'feature_info.csv'), index=False)
-            self.feature_network.to_csv(os.path.join(self.metadata_dir, 'feature_network.csv'), index=False)
+            self.feature_info.to_parquet(os.path.join(self.metadata_dir, 'feature_info.parquet'), compression='brotli')
+            self.feature_network.to_parquet(os.path.join(self.metadata_dir, 'feature_network.parquet'), compression='brotli')
     
     def sample_rates(self):
         nrows = len(self.feature_info)
@@ -101,7 +101,6 @@ class Kinetics:
         basal_df = pd.DataFrame(basal_df)
         self.feature_info = self.feature_info.merge(basal_df, on='feature_id', how='left')
         self.feature_info.loc[self.feature_info[basal_col].isna(), basal_col] = 1
-        # self.feature_network = self.feature_network.drop(columns=['feature_id'])
     
     def calc_effects_sums(self, network, effects_col="effects_sums"):
         # calculating effects sums

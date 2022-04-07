@@ -20,24 +20,24 @@ class Network(ModularSampling, GeneRegulatoryNetwork, HouseKeeping, SignallingCa
             
             # load the GRN and extract the transcription factor network
             if self.verbose:
-                print (f"Sampling GRN: {self.network_name}")
+                print (f"Sampling GRN: {self.network_name}", flush=True)
             
             self.create_grn()
             
             if self.verbose:
-                print (f"GRN Created: {self.network_name}")
+                print (f"GRN Created: {self.network_name}", flush=True)
                 
             net_dfs.append(self.get_edgelist_df(self.tf_egene_net))
             self.tfs = [f'TF_{i}' for i in range(self.num_tfs)]
             
             if self.nkinases != 0:
                 if self.verbose:
-                    print (f"Sampling Signalling Cascades: {self.network_name}")
+                    print (f"Sampling Signalling Cascades: {self.network_name}", flush=True)
                 
                 self.create_signalling_cascades()
                 
                 if self.verbose:
-                    print (f"Finished Sampling Cascades: {self.network_name}")
+                    print (f"Finished Sampling Cascades: {self.network_name}", flush=True)
                 
                 kinase_df = self.get_edgelist_df(self.kinases)
                 self.phosphorylated = set(list(kinase_df.target.unique()) + list(kinase_df.source.unique()))
@@ -46,12 +46,12 @@ class Network(ModularSampling, GeneRegulatoryNetwork, HouseKeeping, SignallingCa
                 
             if self.num_hks != 0:
                 if self.verbose:
-                    print (f"Sampling HouseKeeping Network: {self.network_name}")
+                    print (f"Sampling HouseKeeping Network: {self.network_name}", flush=True)
                     
                 self.create_hks()
                 
                 if self.verbose:
-                    print (f"Sampled HouseKeeping Network: {self.network_name}")
+                    print (f"Sampled HouseKeeping Network: {self.network_name}", flush=True)
                     
                 hk_df = self.get_edgelist_df(self.hks)
                 self.hks = list(hk_df.source.unique()) + list(hk_df.target.unique())
@@ -60,11 +60,11 @@ class Network(ModularSampling, GeneRegulatoryNetwork, HouseKeeping, SignallingCa
             # merged sampled GRNs
             self.merge_networks(net_dfs)
             self.create_metadata()
-            print ("Created Network...")
+            print ("Created Network...", flush=True)
             
             if self.cache_network:
-                self.feature_info.to_csv(os.path.join(self.metadata_dir, 'feature_info.csv'), index=False)
-                self.feature_network.to_csv(os.path.join(self.metadata_dir, 'feature_network.csv'), index=False)
+                self.feature_info.to_csv(os.path.join(self.metadata_dir, 'feature_info.parquet'), compression='brotli')
+                self.feature_network.to_csv(os.path.join(self.metadata_dir, 'feature_network.parquet'), compression='brotli')
     
     def merge_networks(self, dfs):
         # get edgelist dataframe
@@ -104,7 +104,7 @@ class Network(ModularSampling, GeneRegulatoryNetwork, HouseKeeping, SignallingCa
         nodes_to_rename = np.unique(nodes_to_rename)
         vert_loc = df_vert['name'].isin(nodes_to_rename)
                 
-        df_vert['name'].loc[vert_loc, ] = [f'{label}_{i}' for i in range(len(nodes_to_rename))]
+        df_vert['name'].loc[vert_loc, ] = [f'{label}_{i}' for i in range(len(nodes_to_rename)) if nodes_to_rename[i] in df_vert['name'].values]
         df_edge['source'].replace(df_vert['name'], inplace=True)
         df_edge['target'].replace(df_vert['name'], inplace=True)
         

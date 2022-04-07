@@ -19,8 +19,8 @@ class ModularSampling:
             else:
                 node_to_add = self.highest_modular_node(network, sampled_nodes, modular_clusters, neighbor_mode)
             
-            if node_to_add is None:
-                sampled_nodes = []
+            # if node_to_add is None: # may be causing an issue
+                # sampled_nodes = []
             
             if (not node_to_add in sampled_nodes) and (not node_to_add is None):
                 sampled_nodes.append(node_to_add)

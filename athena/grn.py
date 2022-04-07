@@ -9,21 +9,24 @@ class GeneRegulatoryNetwork:
     def create_grn(self):
         # load the GRN and extract the transcription factor network
         if self.verbose:
-            print ("Cleaning Biological Network...")
+            print ("Cleaning Biological Network...", flush=True)
             
         self.grn = self.get_grn()
         self.extract_tf_net()
-
+        
+        if self.tf_net.vcount() <= self.num_tfs:
+            raise Exception("Number of Tfs is Larger than the GRN Provided...", flush=True)
+        
         # sample tfs and e-genes
         if self.verbose:
-            print ("Sampling TFs and E-Genes Network...")
+            print ("Sampling TFs and E-Genes Network...", flush=True)
        
         self.sample_tfs()
         self.sample_egenes()
         
         # clean sampled network
         if self.verbose:
-            print ("Pruning invalid edges...")
+            print ("Pruning invalid edges...", flush=True)
             
         network = self.network_qc()
         self.tf_egene_net = self.rename_nodes(network, self.tfs, 'TF')

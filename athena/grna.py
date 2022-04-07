@@ -1,5 +1,6 @@
 import os
 import random
+import numpy as np
 import pandas as pd
 from tqdm import tqdm
 import itertools as it
@@ -21,14 +22,13 @@ class GuideRNA:
         
         grna_meta = self.get_perturbed_genes(grna_names)
         grna_meta = self.sample_on_target(grna_meta)
-        
         self.grna_meta = pd.DataFrame(grna_meta)
         
         if self.crispr_type == 'activation':
             self.grna_meta['on_target'] = (1 - self.grna_meta['on_target']) + 1
         
         self.create_multiplier_matrix()
-    
+        
     def get_target_genes(self):
         
         if len(self.target_genes) == 0:
@@ -50,24 +50,31 @@ class GuideRNA:
             multiplier = self.create_nonko_meta()
             self.sim_meta = pd.DataFrame({'sim_name': multiplier.index, 'grna': multiplier.index, 'sample_percent': 1})
         
+        multi = []
         nrows = len(multiplier)
         self.calc_sims_per_device(nrows)
-        self.multiplier = {"feature_id": [], "perturbation": [], "grna": [], "sim_i": []}
+        self.multiplier_fp = f'{self.metadata_dir}/multiplier.parquet'
         
-        for i in range(nrows):
+        for i in tqdm(range(nrows)):
             adjust_interval = 1 + i * self.nsims_per_condition
             grna = multiplier.index.values[i]
             perturb_vec = list(multiplier.iloc[i].T.values)
             
             for sim_i in range(self.nsims_per_condition):
+                sim_meta = {"feature_id": [], "perturbation": [], "grna": [], "sim_i": []}
                 sim_i += adjust_interval
                 feature = list(multiplier.columns.values + f"_{sim_i}") 
-                self.multiplier["feature_id"] = self.multiplier["feature_id"] + feature
-                self.multiplier["grna"] = self.multiplier["grna"] + [grna] * len(feature)
-                self.multiplier["sim_i"] = self.multiplier["sim_i"] + [sim_i] * len(feature)
-                self.multiplier["perturbation"] = self.multiplier["perturbation"] + perturb_vec
                 
-        self.multiplier = pd.DataFrame(self.multiplier)
+                sim_meta["feature_id"] = feature
+                sim_meta["perturbation"] = perturb_vec
+                sim_meta["grna"] = [grna] * len(feature)
+                sim_meta["sim_i"] = [sim_i] * len(feature)
+                
+                multi.append(pd.DataFrame(sim_meta))
+                
+        multi = pd.concat(multi, ignore_index=True)
+        multi.to_parquet(self.multiplier_fp, compression='brotli')
+        del multi
         
     def get_perturbed_genes(self, grna_names):
         perturbed_genes = []

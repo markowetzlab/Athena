@@ -13,9 +13,9 @@ class GillespieSSA:
     def run(self):
         
         for batch_i in range(self.nbatches):  
-            print (f'Batch {batch_i} Started...')
+            print (f'Simulation: {self.network_name} Batch {batch_i} Started...', flush=True)
             self.simulate(batch_i)
-            print (f'Batch {batch_i} Completed...')
+            print (f'Simulation: {self.network_name} Batch {batch_i} Completed...', flush=True)
     
     def simulate(self, batch_number):
         # Setup Simulation Context and Parameters
@@ -67,12 +67,13 @@ class GillespieSSA:
         return result, result_index
     
     def initialize_variables(self, queue, device_num):
+        file = f'batch_{device_num}.parquet'
         aff_params, prop_params, change_params = {}, {}, {}
-        affinity = pd.read_csv(os.path.join(self.simulator_dir, 'affinity',f'batch_{device_num}.csv'))
-        regulators = pd.read_csv(os.path.join(self.simulator_dir, 'regulators',f'batch_{device_num}.csv'))
-        propensity = pd.read_csv(os.path.join(self.simulator_dir, 'propensity',f'batch_{device_num}.csv'))
-        change_vec = pd.read_csv(os.path.join(self.simulator_dir, 'change_vec',f'batch_{device_num}.csv'))
-        species_vec = pd.read_csv(os.path.join(self.simulator_dir, 'species_vec',f'batch_{device_num}.csv'))
+        affinity = pd.read_parquet(os.path.join(self.simulator_dir, 'affinity', file))
+        regulators = pd.read_parquet(os.path.join(self.simulator_dir, 'regulators', file))
+        propensity = pd.read_parquet(os.path.join(self.simulator_dir, 'propensity', file))
+        change_vec = pd.read_parquet(os.path.join(self.simulator_dir, 'change_vec', file))
+        species_vec = pd.read_parquet(os.path.join(self.simulator_dir, 'species_vec', file))
         
         # stable affinities parameters
         aff_params['hill'] = ocl_array.to_device(queue, affinity['hill'].values.astype(np.float64))

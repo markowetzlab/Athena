@@ -110,11 +110,9 @@ class Athena(Network, Kinetics, GuideRNA, CompileReactions, GillespieSSA, Sampli
     def setup_simulator_directory(self, simulator_dir):
         self.simulator_dir = simulator_dir
         
-        self.logs_dir = os.path.join(self.simulator_dir, 'logs')
         self.results_dir = os.path.join(self.simulator_dir, 'results')
         self.metadata_dir = os.path.join(self.simulator_dir, 'metadata')
         self.affinity_dir = os.path.join(self.simulator_dir, 'affinity')
-        self.downsample_dir = os.path.join(self.simulator_dir, 'downsample')
         self.propensity_dir = os.path.join(self.simulator_dir, 'propensity')
         self.change_vec_dir = os.path.join(self.simulator_dir, 'change_vec')
         self.regulators_dir = os.path.join(self.simulator_dir, 'regulators')
@@ -122,11 +120,9 @@ class Athena(Network, Kinetics, GuideRNA, CompileReactions, GillespieSSA, Sampli
         
         if not os.path.exists(self.simulator_dir):
             os.mkdir(self.simulator_dir)
-            os.mkdir(self.logs_dir)
             os.mkdir(self.results_dir)
             os.mkdir(self.metadata_dir)
             os.mkdir(self.affinity_dir)
-            os.mkdir(self.downsample_dir)
             os.mkdir(self.propensity_dir)
             os.mkdir(self.change_vec_dir)
             os.mkdir(self.regulators_dir)
@@ -196,6 +192,8 @@ class Athena(Network, Kinetics, GuideRNA, CompileReactions, GillespieSSA, Sampli
         else:
             self.feature_info = pd.read_csv(feature_info)
             self.feature_network = pd.read_csv(feature_network)
+            self.feature_info.to_csv(os.path.join(self.metadata_dir, 'feature_info.csv'), index=False)
+            self.feature_network.to_csv(os.path.join(self.metadata_dir, 'feature_network.csv'), index=False)
     
     def check_grna_parameters(self, target_genes, perturb_tfs, perturb_kinases, on_target, off_target, ngrnas_per_target, ctrl_label, crispr_type, grna_library):
         genes = []
