@@ -51,30 +51,35 @@ class GuideRNA:
             self.sim_meta = pd.DataFrame({'sim_name': multiplier.index, 'grna': multiplier.index, 'sample_percent': 1})
         
         multi = []
+        prev_batch = 0
         nrows = len(multiplier)
         self.calc_sims_per_device(nrows)
-        self.multiplier_fp = f'{self.metadata_dir}/multiplier.parquet'
         
         for i in tqdm(range(nrows)):
-            adjust_interval = 1 + i * self.nsims_per_condition
+            adjust_interval = 1 + (i * self.nsims_per_condition)
             grna = multiplier.index.values[i]
             perturb_vec = list(multiplier.iloc[i].T.values)
             
             for sim_i in range(self.nsims_per_condition):
-                sim_meta = {"feature_id": [], "perturbation": [], "grna": [], "sim_i": []}
                 sim_i += adjust_interval
+                current_batch = sim_i // self.nsims_per_device
+                
+                sim_meta = {"feature_id": [], "perturbation": [], "sim_i": []}
                 feature = list(multiplier.columns.values + f"_{sim_i}") 
                 
                 sim_meta["feature_id"] = feature
                 sim_meta["perturbation"] = perturb_vec
-                sim_meta["grna"] = [grna] * len(feature)
                 sim_meta["sim_i"] = [sim_i] * len(feature)
                 
                 multi.append(pd.DataFrame(sim_meta))
                 
-        multi = pd.concat(multi, ignore_index=True)
-        multi.to_parquet(self.multiplier_fp, compression='brotli')
-        del multi
+                if prev_batch != current_batch:
+                    fp = os.path.join(self.multiplier_dir, f'batch_{prev_batch}.parquet')
+                    multi = pd.concat(multi, ignore_index=True)
+                    multi.to_parquet(fp, compression='brotli')
+                    multi, prev_batch = [], current_batch
+        
+        multi = None
         
     def get_perturbed_genes(self, grna_names):
         perturbed_genes = []

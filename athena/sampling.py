@@ -35,14 +35,12 @@ class Sampling:
         cells_meta = []
         cells = np.array([i for i in range(max_cells)])
         sims = (cells // ncells_from_sim).astype(int) + 1
-        multi = pd.read_parquet(self.multiplier_fp)
-
         for sim, cell in tqdm(zip(sims, cells)):
-            grna_label = multi['grna'].loc[multi.sim_i == sim].unique()[0]
+            sim_meta_index = (sim - 1) // self.nsims_per_condition
+            grna_label = self.sim_meta.grna.iloc[sim_meta_index]
             cells_meta.append({"cell_label": f"cell_{cell}", "sim_label": grna_label, "cell_i": cell,
                                "sim_i": sim, "fp": os.path.join(self.results_dir, f'simulation_{sim}.csv')})
         
-        del multi
         cells_meta = pd.DataFrame(cells_meta)
         
         if self.crispr_type == 'knockout':

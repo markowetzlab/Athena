@@ -1,5 +1,7 @@
 import os
+import gc
 import math
+import psutil
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
@@ -29,7 +31,7 @@ class CompileReactions:
         file = f'batch_{device_i}.parquet'
         
         print (f"Simulation: {self.network_name} Starting to Processing Batch {device_i}...", flush=True)
-        noise_info, noise_network, regulators = self.create_duplicates(device_i)
+        noise_info, noise_network, regulators = self.create_duplicates(device_i, file)
         
         species_vec = self.create_species_vector(noise_info, device_i)
         propensity = self.create_propensity_matrix(noise_info, species_vec, file)
@@ -41,9 +43,11 @@ class CompileReactions:
         propensity.to_parquet(os.path.join(self.propensity_dir, file), compression='brotli')
         change_vec.to_parquet(os.path.join(self.change_vec_dir, file), compression='brotli')
         species_vec.to_parquet(os.path.join(self.species_vec_dir, file), compression='brotli')
-        print (f"Simulation: {self.network_name} Finished Processing Batch {device_i}...", flush=True)
+        
+        del affinity, regulators, propensity, change_vec, species_vec, noise_info, noise_network
+        print (f"Simulation: {self.network_name} Current Memory % Usage: {psutil.virtual_memory()[2]} Finished Processing Batch {device_i}...", flush=True)
     
-    def create_duplicates(self, device_i):
+    def create_duplicates(self, device_i, file):
         noise_info = pd.concat([self.feature_info.copy()] * self.nsims_per_device).reset_index()
         noise_network = pd.concat([self.feature_network.copy()] * self.nsims_per_device).reset_index()
         
@@ -54,7 +58,7 @@ class CompileReactions:
         noise_network['to'] = noise_network['to'] + '_' + noise_network['sim_i'].astype(str)
         noise_network['from'] = noise_network['from'] + '_' + noise_network['sim_i'].astype(str)
         noise_info['feature_id'] = noise_info['feature_id'] + '_' + noise_info['sim_i'].astype(str)
-        noise_info = self.get_perturbation(noise_info)
+        noise_info = self.get_perturbation(noise_info, file)
         
         
         noise_info = self.inject_rate_noise(noise_info)
@@ -298,10 +302,11 @@ class CompileReactions:
         feature_info.drop(columns=['regulators'], inplace=True)
         return feature_info, regulators
     
-    def get_perturbation(self, noise_info):
+    def get_perturbation(self, noise_info, file):
         key_cols = ['feature_id', 'perturbation']
         sim_indices = noise_info.sim_i.unique()
-        multi = pd.read_parquet(self.multiplier_fp)
+        multi = pd.read_parquet(os.path.join(self.multiplier_dir, file))
         multi = multi.loc[multi.sim_i.isin(sim_indices), key_cols]
-        
-        return noise_info.merge(multi, on='feature_id')
+        noise_info = noise_info.merge(multi, on='feature_id', how='left')
+        multi = None
+        return noise_info
