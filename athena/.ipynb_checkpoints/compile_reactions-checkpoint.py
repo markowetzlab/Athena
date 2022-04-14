@@ -34,7 +34,7 @@ class CompileReactions:
         noise_info, noise_network, regulators = self.create_duplicates(device_i, file)
         
         species_vec = self.create_species_vector(noise_info, device_i)
-        propensity = self.create_propensity_matrix(noise_info, species_vec, file)
+        propensity = self.create_propensity_matrix(noise_info, species_vec)
         affinity = self.create_affinity_matrix(noise_network, propensity, species_vec)
         change_vec = self.create_change_vector(noise_info, propensity, species_vec)
         
@@ -104,12 +104,12 @@ class CompileReactions:
         species_state['gene'] = species_state['species'].apply(lambda x: '_'.join(x.split('_')[-3:-1]))
         species_state['sim_i'] = species_state['species'].apply(lambda x: [int(char) for char in x.split('_') if char.isdigit()][-1])
         species_state['molecule_type'] = species_state['species'].apply(lambda x: [char for char in x.split('_') if char in molecules][0])
-        species_state['filepath'] = os.path.join(self.simulator_dir, 'species_vec', f'batch_{device_i}.csv')
+        species_state['filepath'] = os.path.join(self.species_vec_dir, f'batch_{device_i}.parquet')
         species_state['spec_name'] = species_state['species'].apply(lambda x: '_'.join(x.split("_")[:-1]))
         
         return species_state
     
-    def create_propensity_matrix(self, feature_info, species_vec, file):
+    def create_propensity_matrix(self, feature_info, species_vec):
         # need to add reversible reaction for dephosphorlyation
         propensity_dfs = []
         phosphos = feature_info.loc[feature_info.is_phosphorylated, ]

@@ -144,6 +144,7 @@ class GillespieSSA:
         return propensities.get()
     
     def get_firings(self, queue, propensity_vec):
+        # print (max(propensity_vec))
         k = np.random.poisson(propensity_vec * self.tau).astype(np.int32)
         return ocl_array.to_device(queue, k)
     

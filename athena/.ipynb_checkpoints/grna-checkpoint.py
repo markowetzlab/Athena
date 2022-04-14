@@ -53,15 +53,23 @@ class GuideRNA:
         multi = []
         prev_batch = 0
         nrows = len(multiplier)
+        self.sim_meta['nsims'] = np.ceil(self.nsims_per_condition * self.sim_meta['sample_percent'])
+        self.sim_meta['nsims'] = self.sim_meta['nsims'].astype(int)
+        self.nsims_per_condition = self.sim_meta.loc[self.sim_meta.grna == 'CTRL-grna.1', 'nsims'].values[0]
         self.calc_sims_per_device(nrows)
         
-        for i in tqdm(range(nrows)):
-            adjust_interval = 1 + (i * self.nsims_per_condition)
+        for i in tqdm(range(self.sim_meta.shape[0])):
             grna = multiplier.index.values[i]
+            row = self.sim_meta.iloc[i].copy()
             perturb_vec = list(multiplier.iloc[i].T.values)
             
-            for sim_i in range(self.nsims_per_condition):
-                sim_i += adjust_interval
+            if i == 0:
+                adjust_interval = 0
+            else:
+                adjust_interval = self.sim_meta.nsims.iloc[:i].sum()
+            
+            for sim_i in range(row.nsims):
+                sim_i += 1 + adjust_interval
                 current_batch = sim_i // self.nsims_per_device
                 
                 sim_meta = {"feature_id": [], "perturbation": [], "sim_i": []}
@@ -74,12 +82,8 @@ class GuideRNA:
                 multi.append(pd.DataFrame(sim_meta))
                 
                 if prev_batch != current_batch:
-                    fp = os.path.join(self.multiplier_dir, f'batch_{prev_batch}.parquet')
-                    multi = pd.concat(multi, ignore_index=True)
-                    multi.to_parquet(fp, compression='brotli')
+                    self.cache_multiplier(multi, prev_batch)
                     multi, prev_batch = [], current_batch
-        
-        multi = None
         
     def get_perturbed_genes(self, grna_names):
         perturbed_genes = []
@@ -213,13 +217,13 @@ class GuideRNA:
                 
             elif ngenes == 1:
                 if 'PRT' in rowname:
-                    if grna.on_target.values[0]== 0:
+                    if grna.on_target.values[0] == 0:
                         sample_perc.append(1)
                     else:
                         sample_perc.append(grna.on_target.values[0])
                     
                 else:
-                    if grna.on_target.values[0]== 0:
+                    if grna.on_target.values[0] == 0:
                         sample_perc.append(0)
                     else:
                         sample_perc.append(1 - grna.on_target.values[0])
@@ -229,36 +233,39 @@ class GuideRNA:
                 sample_perc.append(perc)
 
         sim_meta = pd.DataFrame({'sim_name': multiplier.index, 'grna': grnas, 'sample_percent': sample_perc})
+        sim_meta = sim_meta.loc[sim_meta.sample_percent != 0]
         return sim_meta
 
     def multiple_genes_percentage(self, grna_meta, multiplier, sim_name):
         grna_meta['perturbed_gene'] = grna_meta['perturbed_gene'].values
         ko_combos = multiplier[list(grna_meta['perturbed_gene'].values)].iloc[sim_name]
-
+        
         for col in ko_combos.index:
             value = ko_combos[col]
+            gene = grna_meta.loc[grna_meta.perturbed_gene == col, 'perturbed_gene'].values[0]
             gene_on_target = grna_meta.loc[grna_meta.perturbed_gene == col, 'on_target'].values[0]
 
             if value == 1:
-                # probability of grna edit
-                ko_combos[col] = 1 - gene_on_target
-            else:
                 # probability of no edit
                 ko_combos[col] = gene_on_target
-
+            else:
+                # probability of edit
+                ko_combos[col] = 1 - gene_on_target
+                
         return round(np.prod(ko_combos), 2)
     
     def calc_sims_per_device(self, nrows):
         nsims = 0
-        total_sims = self.nsims_per_condition * nrows
+        total_sims = self.sim_meta.nsims.sum()
+        ngrnas = len(self.sim_meta.grna.unique())
         
         while nsims != total_sims:
-            self.nsims_per_device = (self.nsims_per_condition * nrows) // self.nbatches
+            self.nsims_per_device = total_sims // self.nbatches
             nsims = self.nsims_per_device * self.nbatches
-
+            
             if nsims != total_sims:
                 self.nbatches += 1
-    
+            
     def check_crispr_type(self, crispr_type):
         
         try:
@@ -284,3 +291,9 @@ class GuideRNA:
         
         if self.on_target is None:
             self.on_target = random.choices(self.grna_library.on_target, weights=probs, k=1)[0]
+            
+    def cache_multiplier(self, multi, prev_batch):
+        fp = os.path.join(self.multiplier_dir, f'batch_{prev_batch}.parquet')
+        multi = pd.concat(multi, ignore_index=True)
+        multi.to_parquet(fp, compression='brotli')
+        

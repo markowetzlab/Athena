@@ -25,28 +25,23 @@ class Sampling:
         return cells_meta, gene_expr
         
     def sampling_cells(self, ncells=10000):
+        ngrnas = len(self.sim_meta.grna.unique())
         ncells_from_sim = (self.perturb_time / self.update_interval)
-        max_cells = int((self.sim_meta.shape[0] * self.nsims_per_condition) * ncells_from_sim)
+        max_cells = int(self.sim_meta.nsims.sum() * ncells_from_sim)
         
         if ncells > max_cells:
             raise Exception(f"Simulation: {self.network_name} Number of cells requested is greater than the number of cells simulated. Sample fewer cells...")
-        
-
+            
         cells_meta = []
         cells = np.array([i for i in range(max_cells)])
-        sims = (cells // ncells_from_sim).astype(int) + 1
-        for sim, cell in tqdm(zip(sims, cells)):
-            sim_meta_index = (sim - 1) // self.nsims_per_condition
-            grna_label = self.sim_meta.grna.iloc[sim_meta_index]
-            cells_meta.append({"cell_label": f"cell_{cell}", "sim_label": grna_label, "cell_i": cell,
+        sims, sim_labels = self.get_cells_sims()
+        
+        for sim, sim_label, cell in tqdm(zip(sims, sim_labels, cells)):
+            cells_meta.append({"cell_label": f"cell_{cell}", "sim_label": sim_label, "cell_i": cell,
                                "sim_i": sim, "fp": os.path.join(self.results_dir, f'simulation_{sim}.csv')})
         
         cells_meta = pd.DataFrame(cells_meta)
-        
-        if self.crispr_type == 'knockout':
-            cells = self.ko_sample_cells(cells_meta, ncells)
-        else:
-            cells = list(random.choices(cells, k=ncells))
+        cells = self.sample_cells_per_grna(cells_meta, ncells)
         
         cells_meta = cells_meta.iloc[cells]
         gene_expr = self.collapse_molecules(cells)
@@ -146,16 +141,36 @@ class Sampling:
         
         return sim_counts_cpm
     
-    def ko_sample_cells(self, cells_meta, ncells):
+    def sample_cells_per_grna(self, cells_meta, ncells):
         sampled_cells = []
-            
+        ngrnas = len(self.sim_meta.grna.unique())
+        self.ncells_per_grna = round(ncells / ngrnas)
+        
         for row_i in range(len(self.sim_meta)):
             row = self.sim_meta.iloc[row_i]
             sim_cells = cells_meta.loc[cells_meta.sim_label == row.sim_name, 'cell_i'].values
             
             if row.sample_percent != 0:
-                n = int(ncells * row.sample_percent)
+                n = int(self.ncells_per_grna * row.sample_percent)
                 sampled = random.choices(sim_cells, k=n)
                 sampled_cells = sampled_cells + sampled
         
         return sampled_cells
+    
+    def get_cells_sims(self):
+        cell_sim, sim_labels = [], []
+        ncells_per_sim = int(self.perturb_time / self.update_interval)
+        max_cells = int(self.sim_meta.nsims.sum() * ncells_per_sim)
+
+        for row_i, row in self.sim_meta.iterrows():
+            nsims_adjust = 1 + self.sim_meta.nsims.iloc[:row_i].sum()
+            
+            for row_sim_i in range(row.nsims):
+                row_sim_i = row_sim_i + nsims_adjust
+                sims = [row_sim_i] * ncells_per_sim
+                
+                for sim_i in sims:
+                    sim_labels.append(row.sim_name)
+                    cell_sim.append(sim_i)
+                    
+        return cell_sim, sim_labels
