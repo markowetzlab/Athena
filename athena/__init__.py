@@ -370,3 +370,12 @@ class Athena(Network, Kinetics, GuideRNA, CompileReactions, GillespieSSA, Sampli
                     break
         
         return cascade_sizes
+    
+    def manage_dtypes(self, df):
+        df = df.convert_dtypes()
+        fcols = df.select_dtypes('float').columns
+        icols = df.select_dtypes('integer').columns
+        
+        df[fcols] = df[fcols].apply(pd.to_numeric, downcast='float')
+        df[icols] = df[icols].apply(pd.to_numeric, downcast='integer')
+        return df

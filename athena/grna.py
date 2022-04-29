@@ -28,6 +28,8 @@ class GuideRNA:
             self.grna_meta['on_target'] = (1 - self.grna_meta['on_target']) + 1
         
         self.create_multiplier_matrix()
+        self.grna_meta.to_csv(os.path.join(self.metadata_dir, 'grna_meta.csv'), index=False)
+        self.sim_meta.to_csv(os.path.join(self.metadata_dir, 'simulation_meta.csv'), index=False)
         
     def get_target_genes(self):
         

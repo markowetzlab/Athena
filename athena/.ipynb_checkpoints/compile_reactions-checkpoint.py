@@ -31,22 +31,16 @@ class CompileReactions:
         file = f'batch_{device_i}.parquet'
         
         print (f"Simulation: {self.network_name} Starting to Processing Batch {device_i}...", flush=True)
-        noise_info, noise_network, regulators = self.create_duplicates(device_i, file)
+        noise_info, noise_network = self.create_duplicates(device_i, file)
         
-        species_vec = self.create_species_vector(noise_info, device_i)
-        propensity = self.create_propensity_matrix(noise_info, species_vec)
-        affinity = self.create_affinity_matrix(noise_network, propensity, species_vec)
-        change_vec = self.create_change_vector(noise_info, propensity, species_vec)
+        species_vec = self.create_species_vector(noise_info, file)
+        propensity = self.create_propensity_matrix(noise_info, species_vec, file)
+        self.create_affinity_matrix(noise_network, propensity, species_vec, file)
+        self.create_change_vector(noise_info, propensity, species_vec, file)
         
-        affinity.to_parquet(os.path.join(self.affinity_dir, file), compression='brotli')
-        regulators.to_parquet(os.path.join(self.regulators_dir, file), compression='brotli')
-        propensity.to_parquet(os.path.join(self.propensity_dir, file), compression='brotli')
-        change_vec.to_parquet(os.path.join(self.change_vec_dir, file), compression='brotli')
-        species_vec.to_parquet(os.path.join(self.species_vec_dir, file), compression='brotli')
-        
-        del affinity, regulators, propensity, change_vec, species_vec, noise_info, noise_network
         print (f"Simulation: {self.network_name} Current Memory % Usage: {psutil.virtual_memory()[2]} Finished Processing Batch {device_i}...", flush=True)
-    
+        del propensity, species_vec
+        
     def create_duplicates(self, device_i, file):
         noise_info = pd.concat([self.feature_info.copy()] * self.nsims_per_device).reset_index()
         noise_network = pd.concat([self.feature_network.copy()] * self.nsims_per_device).reset_index()
@@ -89,9 +83,14 @@ class CompileReactions:
         
         noise_info = noise_info.reset_index(drop=True)
         noise_network = noise_network.reset_index(drop=True)
-        return noise_info, noise_network, regulators
+        regulators.to_parquet(os.path.join(self.regulators_dir, file), compression='brotli')
+        
+        noise_info = self.manage_dtypes(noise_info)
+        noise_network = self.manage_dtypes(noise_network)
+        
+        return noise_info, noise_network
 
-    def create_species_vector(self, feature_info, device_i):
+    def create_species_vector(self, feature_info, file):
         molecules = ['premrna', 'mrna', 'protein']
         mrna = list('mol_mrna_' + feature_info.feature_id.values)
         premrna = list('mol_premrna_' + feature_info.feature_id.values) 
@@ -100,16 +99,19 @@ class CompileReactions:
         species = premrna + mrna + protein + phospho_protein
         
         species_state = pd.DataFrame({'species': species, 'state': [0] * len(species)})
+        species_state = self.manage_dtypes(species_state)
         
         species_state['gene'] = species_state['species'].apply(lambda x: '_'.join(x.split('_')[-3:-1]))
         species_state['sim_i'] = species_state['species'].apply(lambda x: [int(char) for char in x.split('_') if char.isdigit()][-1])
         species_state['molecule_type'] = species_state['species'].apply(lambda x: [char for char in x.split('_') if char in molecules][0])
-        species_state['filepath'] = os.path.join(self.species_vec_dir, f'batch_{device_i}.parquet')
+        species_state['filepath'] = os.path.join(self.species_vec_dir, file)
         species_state['spec_name'] = species_state['species'].apply(lambda x: '_'.join(x.split("_")[:-1]))
         
+        species_state.to_parquet(os.path.join(self.species_vec_dir, file), compression='brotli')
+        species_state = species_state[['species']]
         return species_state
     
-    def create_propensity_matrix(self, feature_info, species_vec):
+    def create_propensity_matrix(self, feature_info, species_vec, file):
         # need to add reversible reaction for dephosphorlyation
         propensity_dfs = []
         phosphos = feature_info.loc[feature_info.is_phosphorylated, ]
@@ -180,6 +182,7 @@ class CompileReactions:
             propensity_dfs.append(reaction_set)
         
         propensity = pd.concat(propensity_dfs)
+        propensity = self.manage_dtypes(propensity)
         species_index = {'index':'species_index'}
         temp = species_vec['species'].reset_index()
         propensity = propensity.merge(temp.rename(columns=species_index), on='species', how='left')
@@ -188,17 +191,23 @@ class CompileReactions:
         propensity['species_index'] = propensity['species_index'].astype(np.int32)
         
         self.num_reactions = len(propensity)
+        propensity.to_parquet(os.path.join(self.propensity_dir, file), compression='brotli')
+        propensity = propensity[['reaction']]
+        
         return propensity
     
-    def create_affinity_matrix(self, feature_network, propensity, species_vec): 
-        temp_prop = propensity['reaction'].reset_index().rename(columns={'index': 'to_index'})
-        temp_spec = species_vec['species'].reset_index().rename(columns={'index': 'from_index'})
+    def create_affinity_matrix(self, feature_network, propensity, species_vec, file): 
+        temp_prop = propensity[['reaction']].reset_index().rename(columns={'index': 'to_index'})
+        temp_spec = species_vec[['species']].reset_index().rename(columns={'index': 'from_index'})
         
         feature_network = feature_network.merge(temp_prop, left_on='to', right_on='reaction', how='left')
         feature_network = feature_network.merge(temp_spec, left_on='from', right_on='species', how='left')
-        return feature_network
+        feature_network = self.manage_dtypes(feature_network)
+        
+        feature_network.to_parquet(os.path.join(self.affinity_dir, file), compression='brotli')
+        del feature_network
 
-    def create_change_vector(self, noise_info, propensity, species_vec):
+    def create_change_vector(self, noise_info, propensity, species_vec, file):
         phospho_feature = noise_info.loc[noise_info.is_phosphorylated, 'feature_id']
         change_rows = [{'species': 'mol_premrna_' + noise_info.feature_id, 
                         'reaction': "transcription_" + noise_info.feature_id,
@@ -238,12 +247,14 @@ class CompileReactions:
                         'reaction_effect': [-1] * len(phospho_feature)}]
         
         change_vec = pd.concat([pd.DataFrame(row) for row in change_rows])
+        change_vec = self.manage_dtypes(change_vec)
         reacts = propensity[['reaction']].reset_index().rename(columns={'index':'react_index'})
         species = species_vec[['species']].reset_index().rename(columns={'index':'species_index'})
 
         change_vec = change_vec.merge(species, on='species', how='left')
         change_vec = change_vec.merge(reacts, on='reaction', how='left')
-        return change_vec
+        change_vec.to_parquet(os.path.join(self.change_vec_dir, file), compression='brotli')
+        del change_vec
     
     def inject_rate_noise(self, feature_info):
         nrows = feature_info.shape[0]
@@ -301,6 +312,15 @@ class CompileReactions:
         # removing unnecessary columns
         feature_info.drop(columns=['regulators'], inplace=True)
         return feature_info, regulators
+    
+    def manage_dtypes(self, df):
+        df = df.convert_dtypes()
+        fcols = df.select_dtypes('float').columns
+        icols = df.select_dtypes('integer').columns
+        
+        df[fcols] = df[fcols].apply(pd.to_numeric, downcast='float')
+        df[icols] = df[icols].apply(pd.to_numeric, downcast='integer')
+        return df
     
     def get_perturbation(self, noise_info, file):
         key_cols = ['feature_id', 'perturbation']

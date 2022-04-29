@@ -12,11 +12,9 @@ class GillespieSSA:
     
     def run(self):
         
-        for batch_i in range(self.nbatches):  
-            print (f'Simulation: {self.network_name} Batch {batch_i} Started...', flush=True)
+        for batch_i in tqdm(range(self.nbatches), desc='Batch For Loop',leave=False):
             self.simulate(batch_i)
-            print (f'Simulation: {self.network_name} Batch {batch_i} Completed...', flush=True)
-    
+            
     def simulate(self, batch_number):
         # Setup Simulation Context and Parameters
         print ("Creating Command Queue...")
@@ -28,7 +26,7 @@ class GillespieSSA:
             results, result_index = self.setup_results(species_vec)
             cache_species = species_vec.iloc[result_index]
             
-            for time_index in tqdm(time_span):
+            for time_index in tqdm(time_span, desc=f'Running Simulations Batch: {batch_number}'):
                 # calculate affinites and propensities
                 affinities = self.calc_affinities(program, queue, aff_params, species_array, affinities)
                 propensity_vec = self.calc_propensities(program, queue, prop_params, propensities, affinities, species_array)
@@ -42,11 +40,8 @@ class GillespieSSA:
                 cache_interval, results = self.cache_results(batch_number, time_index, cache_interval, cache_species, 
                                                              species_array, results, result_index)
             
-            print ('Simulation Complete. Processing Results...')
             cache_interval, results = self.cache_results(batch_number, time_index, cache_interval, cache_species, 
                                                          species_array, results, result_index)
-            
-        return 'Finished Processing Simulation...'
     
     def setup_simulation(self):
         cache_interval = 0
@@ -58,7 +53,7 @@ class GillespieSSA:
         return context, program, cache_interval, not_perturbed, time_span
     
     def setup_results(self, species_vec):
-        if self.save_protein:
+        if self.save_protein: # remove this option
             result_index = species_vec.index.values
         else:
             result_index = species_vec.loc[species_vec.molecule_type != 'protein', ].index.values
@@ -180,18 +175,30 @@ class GillespieSSA:
                 sims = cache_species.sim_i.unique()
                 
                 for sim in sims:
-                    sim_spec_df = cache_species.loc[cache_species.sim_i == sim,]
-                    sim_res = results[:, sim_spec_df.index]
-                    colnames = list(sim_spec_df.spec_name.values)
-                    fp = os.path.join(self.results_dir, 'simulated_counts.csv')
+                    spec = cache_species.loc[cache_species.sim_i == sim,]
+                    sim_res = results[:, spec.index]
+                    colnames = list(spec.spec_name.values)
+                    fp = os.path.join(self.results_dir, f'simulated_counts.csv.gz')
+                    meta_fp = os.path.join(self.results_dir, f'cell_metadata.csv.gz')
                     
                     df = pd.DataFrame(sim_res, columns=colnames)
-                    df['sim_i'] = sim
+                    
+                    if self.collapse_mrna:
+                        spec = spec.sort_values(by=['gene'])
+                        mrna = spec.loc[spec.molecule_type == 'mrna', 'spec_name'].values
+                        premrna = spec.loc[spec.molecule_type == 'premrna', 'spec_name'].values
+                        df = pd.DataFrame(df[mrna].values + df[premrna].values, columns=mrna)
+                    
+                    df = df.apply(pd.to_numeric)
+                    df = self.manage_dtypes(df)
+                    cell_meta = pd.DataFrame({'sim_i': [sim] * df.shape[0]})
                     
                     if os.path.exists(fp):
-                        df.to_csv(fp, mode='a', index=False, header=False)
+                        df.to_csv(fp, mode='a', index=False, header=False, compression='gzip')
+                        cell_meta.to_csv(meta_fp, mode='a', index=False, header=False, compression='gzip')
                     else:
-                        df.to_csv(fp, index=False)
+                        df.to_csv(fp, index=False, compression='gzip')
+                        cell_meta.to_csv(meta_fp, index=False, compression='gzip')
                 
                 results = np.zeros(shape=(self.cache_size, len(result_index)))    
                 cache_interval = 0

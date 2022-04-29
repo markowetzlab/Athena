@@ -8,9 +8,9 @@ from multiprocessing import Pool, RLock
 
 class Sampling:
     
-    def sample(self, ncells=10000, pop_fp=None, cache=True):
+    def sample(self, ncells=10000, pop_fp=None, cache=True, sim_fp=None):
         print (f"Simulation: {self.network_name} Sampling Cells...", flush=True)
-        cells_meta, gene_expr = self.sampling_cells(ncells)
+        cells_meta, gene_expr = self.sampling_cells(ncells, sim_fp)
         print (f"Simulation: {self.network_name} Sampling Molecules...", flush=True)
         gene_expr, lib_sizes = self.sampling_molecules(gene_expr, pop_fp)
         
@@ -24,8 +24,11 @@ class Sampling:
         
         return cells_meta, gene_expr
         
-    def sampling_cells(self, ncells=10000):
-        ngrnas = len(self.sim_meta.grna.unique())
+    def sampling_cells(self, ncells, sim_fp):
+        
+        if sim_fp is None:
+            sim_fp = os.path.join(self.results_dir, 'simulated_counts.csv.gz')
+        
         ncells_from_sim = (self.perturb_time / self.update_interval)
         max_cells = int(self.sim_meta.nsims.sum() * ncells_from_sim)
         
@@ -44,7 +47,7 @@ class Sampling:
         cells = self.sample_cells_per_grna(cells_meta, ncells)
         
         cells_meta = cells_meta.iloc[cells]
-        gene_expr = self.collapse_molecules(cells)
+        gene_expr = self.load_cells(cells, sim_fp)
         
         return cells_meta, gene_expr
     
@@ -58,8 +61,8 @@ class Sampling:
         realcounts = pop.X.toarray()
         cell_umi = pop.obs.total_counts.values
         
-        lib_size = self.calc_library_size(cell_umi, gene_expr.values)
-        simcounts_cpm = self.calc_cpm(realcounts, gene_expr.values)
+        lib_size = self.calc_library_size(cell_umi, gene_expr.to_numpy(dtype=np.int16))
+        simcounts_cpm = self.calc_cpm(realcounts, gene_expr.to_numpy(dtype=np.int16))
         downsampled_counts = self.downsampling(simcounts_cpm, lib_size)
         gene_expr = pd.DataFrame(downsampled_counts, columns=gene_expr.columns)
         
@@ -80,23 +83,9 @@ class Sampling:
         meta = meta.reset_index(drop=True)
         return meta
     
-    def collapse_molecules(self, sampled_cells):
-        df = pd.read_csv(os.path.join(self.results_dir, 'simulated_counts.csv'))
-        df = df.sort_values(by=['sim_i'])
-        df = df.reset_index(drop=True)
+    def load_cells(self, sampled_cells, sim_fp):
+        df = pd.read_csv(sim_fp, dtype=np.int16)
         df = df.iloc[sampled_cells]
-        df = df.drop(columns=['sim_i'])
-        
-        if self.collapse_mrna:
-            spec = pd.read_parquet(os.path.join(self.species_vec_dir, 'batch_0.parquet'))
-            spec = spec.drop(columns=['species', 'state', 'sim_i'])
-            spec = spec.loc[spec.molecule_type != 'protein', ]
-            spec = spec.drop_duplicates(subset=['spec_name'])
-            spec = spec.sort_values(by=['gene'])
-
-            mrna = spec.loc[spec.molecule_type == 'mrna', 'spec_name'].values
-            premrna = spec.loc[spec.molecule_type == 'premrna', 'spec_name'].values
-            df = pd.DataFrame(df[mrna].values + df[premrna].values, columns=mrna)
         
         return df
         
@@ -174,3 +163,4 @@ class Sampling:
                     cell_sim.append(sim_i)
                     
         return cell_sim, sim_labels
+            
