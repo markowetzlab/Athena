@@ -19,8 +19,8 @@ class Sampling:
         
         if cache:
             print (f"Simulation: {self.network_name} Caching....", flush=True)
-            cells_meta.to_csv(os.path.join(self.metadata_dir, 'cells_metadata.csv'), index=False)
-            gene_expr.to_csv(os.path.join(self.metadata_dir, 'gene_expression.csv'), index=False)
+            cells_meta.to_csv(os.path.join(self.metadata_dir, 'cells_metadata.csv.bz2'), compression='bz2', index=False)
+            gene_expr.to_csv(os.path.join(self.metadata_dir, 'gene_expression.csv.bz2'), compression='bz2', index=False)
         
         return cells_meta, gene_expr
         
@@ -163,4 +163,3 @@ class Sampling:
                     cell_sim.append(sim_i)
                     
         return cell_sim, sim_labels
-            
