@@ -29,21 +29,15 @@ class Sampling:
         if sim_fp is None:
             sim_fp = os.path.join(self.results_dir, 'simulated_counts.csv.gz')
         
-        ncells_from_sim = (self.perturb_time / self.update_interval)
-        max_cells = int(self.sim_meta.nsims.sum() * ncells_from_sim)
+        self.cell_sim_meta = pd.read_csv(f'{self.results_dir}/cell_metadata.csv.gz')
         
-        if ncells > max_cells:
+        if ncells > self.cell_sim_meta.shape[0]:
             raise Exception(f"Simulation: {self.network_name} Number of cells requested is greater than the number of cells simulated. Sample fewer cells...")
             
         cells_meta = []
-        cells = np.array([i for i in range(max_cells)])
-        sims, sim_labels = self.get_cells_sims()
+        cells = np.array([i for i in range(self.cell_sim_meta.shape[0])])
+        cells_meta = self.get_cells_meta()
         
-        for sim, sim_label, cell in tqdm(zip(sims, sim_labels, cells)):
-            cells_meta.append({"cell_label": f"cell_{cell}", "sim_label": sim_label, "cell_i": cell,
-                               "sim_i": sim, "fp": os.path.join(self.results_dir, f'simulation_{sim}.csv')})
-        
-        cells_meta = pd.DataFrame(cells_meta)
         cells = self.sample_cells_per_grna(cells_meta, ncells)
         
         cells_meta = cells_meta.iloc[cells]
@@ -146,20 +140,25 @@ class Sampling:
         
         return sampled_cells
     
-    def get_cells_sims(self):
-        cell_sim, sim_labels = [], []
+    def get_cells_meta(self):
+        cells, cell_sims, grna_labels, sim_labels = [], [], [], []
         ncells_per_sim = int(self.perturb_time / self.update_interval)
-        max_cells = int(self.sim_meta.nsims.sum() * ncells_per_sim)
 
         for row_i, row in self.sim_meta.iterrows():
             nsims_adjust = 1 + self.sim_meta.nsims.iloc[:row_i].sum()
-            
+
             for row_sim_i in range(row.nsims):
                 row_sim_i = row_sim_i + nsims_adjust
-                sims = [row_sim_i] * ncells_per_sim
-                
-                for sim_i in sims:
+                cell_sim_meta = self.cell_sim_meta.loc[self.cell_sim_meta.sim_i == row_sim_i]
+
+                for cell_i in range(cell_sim_meta.shape[0]):
+                    grna_labels.append(row.grna)
                     sim_labels.append(row.sim_name)
-                    cell_sim.append(sim_i)
+                    cells.append(cell_sim_meta.index[cell_i])
+                    cell_sims.append(cell_sim_meta.iloc[cell_i].sim_i)
                     
-        return cell_sim, sim_labels
+        cells_meta = pd.DataFrame({"cell_i": cells,
+                                   "sim_i": cell_sims, 
+                                   "sim_label": sim_labels,
+                                   "grna_label": grna_labels})
+        return cells_meta
