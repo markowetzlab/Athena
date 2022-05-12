@@ -30,6 +30,7 @@ class Sampling:
             sim_fp = os.path.join(self.results_dir, 'simulated_counts.csv.gz')
         
         self.cell_sim_meta = pd.read_csv(f'{self.results_dir}/cell_metadata.csv.gz')
+        self.cell_sim_meta = self.cell_sim_meta.reset_index().rename(columns={'index': 'cell_i'})
         
         if ncells > self.cell_sim_meta.shape[0]:
             raise Exception(f"Simulation: {self.network_name} Number of cells requested is greater than the number of cells simulated. Sample fewer cells...")
@@ -141,7 +142,7 @@ class Sampling:
         return sampled_cells
     
     def get_cells_meta(self):
-        cells, cell_sims, grna_labels, sim_labels = [], [], [], []
+        cells_meta = []
         ncells_per_sim = int(self.perturb_time / self.update_interval)
 
         for row_i, row in self.sim_meta.iterrows():
@@ -152,13 +153,9 @@ class Sampling:
                 cell_sim_meta = self.cell_sim_meta.loc[self.cell_sim_meta.sim_i == row_sim_i]
 
                 for cell_i in range(cell_sim_meta.shape[0]):
-                    grna_labels.append(row.grna)
-                    sim_labels.append(row.sim_name)
-                    cells.append(cell_sim_meta.index[cell_i])
-                    cell_sims.append(cell_sim_meta.iloc[cell_i].sim_i)
+                    cells_meta.append({"cell_i": cell_sim_meta.iloc[cell_i].cell_i,
+                                       "sim_i": cell_sim_meta.iloc[cell_i].sim_i,
+                                       "sim_label": row.sim_name, 
+                                       "grna_label": row.grna})
                     
-        cells_meta = pd.DataFrame({"cell_i": cells,
-                                   "sim_i": cell_sims, 
-                                   "sim_label": sim_labels,
-                                   "grna_label": grna_labels})
-        return cells_meta
+        return pd.DataFrame(cells_meta)
