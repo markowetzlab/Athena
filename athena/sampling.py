@@ -29,7 +29,7 @@ class Sampling:
         if sim_fp is None:
             sim_fp = os.path.join(self.results_dir, 'simulated_counts.csv.gz')
         
-        self.cell_sim_meta = pd.read_csv(f'{self.results_dir}/cell_metadata.csv.gz')
+        self.cell_sim_meta = pd.read_csv(f'{self.results_dir}/cell_metadata.csv.gz', dtype=np.int16)
         self.cell_sim_meta = self.cell_sim_meta.reset_index().rename(columns={'index': 'cell_i'})
         
         if ncells > self.cell_sim_meta.shape[0]:
