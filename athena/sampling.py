@@ -134,9 +134,12 @@ class Sampling:
             row = self.sim_meta.iloc[row_i]
             sim_cells = cells_meta.loc[cells_meta.sim_label == row.sim_name, 'cell_i'].values
             
+            if len(sim_cells) > self.ncells_per_grna:
+                self.ncells_per_grna = len(sim_cells)            
+
             if row.sample_percent != 0:
                 n = int(self.ncells_per_grna * row.sample_percent)
-                sampled = random.choices(sim_cells, k=n)
+                sampled = random.sample(sim_cells, k=n)
                 sampled_cells = sampled_cells + sampled
         
         return sampled_cells
