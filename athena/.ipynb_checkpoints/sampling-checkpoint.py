@@ -29,7 +29,11 @@ class Sampling:
         if sim_fp is None:
             sim_fp = os.path.join(self.results_dir, 'simulated_counts.csv.gz')
         
-        self.cell_sim_meta = pd.read_csv(f'{self.results_dir}/cell_metadata.csv.gz')
+        gene_names = list('mol_mrna_' + self.feature_info.feature_id.values)
+        data_types = [np.int16] * len(gene_names)
+        dtypes = dict(zip(gene_names, data_types))
+        
+        self.cell_sim_meta = pd.read_csv(f'{self.results_dir}/cell_metadata.csv.gz', dtype=dtypes)
         self.cell_sim_meta = self.cell_sim_meta.reset_index().rename(columns={'index': 'cell_i'})
         
         if ncells > self.cell_sim_meta.shape[0]:
@@ -133,10 +137,14 @@ class Sampling:
         for row_i in range(len(self.sim_meta)):
             row = self.sim_meta.iloc[row_i]
             sim_cells = cells_meta.loc[cells_meta.sim_label == row.sim_name, 'cell_i'].values
+            sim_cells = list(sim_cells)
             
+            if len(sim_cells) > self.ncells_per_grna:
+                self.ncells_per_grna = len(sim_cells)            
+
             if row.sample_percent != 0:
                 n = int(self.ncells_per_grna * row.sample_percent)
-                sampled = random.choices(sim_cells, k=n)
+                sampled = random.sample(sim_cells, k=n)
                 sampled_cells = sampled_cells + sampled
         
         return sampled_cells
