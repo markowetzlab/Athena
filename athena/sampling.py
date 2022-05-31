@@ -29,11 +29,7 @@ class Sampling:
         if sim_fp is None:
             sim_fp = os.path.join(self.results_dir, 'simulated_counts.csv.gz')
         
-        gene_names = list('mol_mrna_' + self.feature_info.feature_id.values)
-        data_types = [np.int16] * len(gene_names)
-        dtypes = dict(zip(gene_names, data_types))
-        
-        self.cell_sim_meta = pd.read_csv(f'{self.results_dir}/cell_metadata.csv.gz', dtype=dtypes)
+        self.cell_sim_meta = pd.read_csv(f'{self.results_dir}/cell_metadata.csv.gz')
         self.cell_sim_meta = self.cell_sim_meta.reset_index().rename(columns={'index': 'cell_i'})
         
         if ncells > self.cell_sim_meta.shape[0]:
@@ -42,7 +38,6 @@ class Sampling:
         cells_meta = []
         cells = np.array([i for i in range(self.cell_sim_meta.shape[0])])
         cells_meta = self.get_cells_meta()
-        
         cells = self.sample_cells_per_grna(cells_meta, ncells)
         
         cells_meta = cells_meta.iloc[cells]
@@ -60,8 +55,8 @@ class Sampling:
         realcounts = pop.X.toarray()
         cell_umi = pop.obs.total_counts.values
         
-        lib_size = self.calc_library_size(cell_umi, gene_expr.to_numpy(dtype=np.int16))
-        simcounts_cpm = self.calc_cpm(realcounts, gene_expr.to_numpy(dtype=np.int16))
+        lib_size = self.calc_library_size(cell_umi, gene_expr)
+        simcounts_cpm = self.calc_cpm(realcounts, gene_expr)
         downsampled_counts = self.downsampling(simcounts_cpm, lib_size)
         gene_expr = pd.DataFrame(downsampled_counts, columns=gene_expr.columns)
         
@@ -89,7 +84,7 @@ class Sampling:
         return df
         
     def calc_library_size(self, cell_umis, sim_counts):
-        sim_counts_ls = np.sum(sim_counts, axis=1)
+        sim_counts_ls = sim_counts.sum(axis=1).values
         
         if self.map_reference_ls:
             # sampling library
@@ -102,7 +97,7 @@ class Sampling:
     
     def calc_cpm(self, realcount, sim_counts):
         realcount_ls = np.sum(realcount, axis=1).reshape(-1, 1)
-        sim_counts_ls = np.sum(sim_counts, axis=1).reshape(-1, 1)
+        sim_counts_ls = sim_counts.sum(axis=1).values.reshape(-1, 1)
         
         realcount_cpm = realcount / realcount_ls
         sim_counts_cpm = sim_counts / sim_counts_ls
@@ -111,10 +106,10 @@ class Sampling:
             # sort sim counts data via least to greatest
             sim_shape = sim_counts.shape
             realcount_cpm = realcount_cpm.flatten()
-            sim_counts_cpm = sim_counts_cpm.flatten()
+            sim_cpm_size = sim_shape[0] * sim_shape[1]
             
             realcount_cpm = realcount_cpm[realcount_cpm != 0]
-            sim_probs = np.random.uniform(size=len(sim_counts_cpm))
+            sim_probs = np.random.uniform(size=sim_cpm_size)
             sim_counts_cpm = np.quantile(realcount_cpm, sim_probs).reshape(sim_shape)
             sim_counts_cpm = sim_counts_cpm / np.sum(sim_counts_cpm, axis=1).reshape(-1, 1)
         
@@ -139,7 +134,8 @@ class Sampling:
             sim_cells = cells_meta.loc[cells_meta.sim_label == row.sim_name, 'cell_i'].values
             sim_cells = list(sim_cells)
             
-            if len(sim_cells) > self.ncells_per_grna:
+            if len(sim_cells) < self.ncells_per_grna:
+                print ("changing ncells_per_grna...")
                 self.ncells_per_grna = len(sim_cells)            
 
             if row.sample_percent != 0:
