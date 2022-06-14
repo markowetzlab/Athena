@@ -194,8 +194,12 @@ class Athena(Network, Kinetics, GuideRNA, CompileReactions, GillespieSSA, Sampli
         else:
             self.feature_info = pd.read_parquet(feature_info)
             self.feature_network = pd.read_parquet(feature_network)
-            self.feature_info.to_parquet(os.path.join(self.metadata_dir, 'feature_info.csv'), compression='brotli')
-            self.feature_network.to_parquet(os.path.join(self.metadata_dir, 'feature_network.csv'), compression='brotli')
+            self.feature_info.to_parquet(os.path.join(self.metadata_dir,
+                                                      'feature_info.parquet'),
+                                         compression='brotli')
+            self.feature_network.to_parquet(os.path.join(self.metadata_dir,
+                                                         'feature_network.parquet'),
+                                            compression='brotli')
     
     def check_grna_parameters(self, target_genes, perturb_tfs, perturb_kinases, on_target, off_target, ngrnas_per_target, ctrl_label, crispr_type, grna_library):
         genes = []

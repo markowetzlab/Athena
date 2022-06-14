@@ -35,24 +35,28 @@ class Kinetics:
             self.feature_network.to_parquet(os.path.join(self.metadata_dir, 'feature_network.parquet'), compression='brotli')
     
     def sample_rates(self):
+        finfo = self.feature_info
         nrows = len(self.feature_info)
+        nphospho = len(self.phosphorylated)
         
-        self.feature_info['effects_sums'] = 0
-        self.feature_info['independence'] = 1
-        self.feature_info['base_activity'] = 0
-        self.feature_info['kinase_effects_sums'] = 0
-        self.feature_info['kinase_base_activity'] = 0
-        self.feature_info['phosphorylation_rate'] = 0
-        self.feature_info['dephosphorylation_rate'] = 0
-        self.feature_info['transcription_rate'] = uniform(size=nrows, high=20, low=10)
-        self.feature_info['translation_rate'] = uniform(size=nrows, high=150, low=100)
-        self.feature_info['mrna_halflife'] = uniform(size=nrows, high=5, low=2.5)
-        self.feature_info['protein_halflife'] = uniform(size=nrows, high=10, low=5)
-        self.feature_info['splicing_rate'] = math.log(2) / 2
-        self.feature_info['mrna_decay_rate'] = math.log(2) / self.feature_info['mrna_halflife']
-        self.feature_info['protein_decay_rate'] = math.log(2) / self.feature_info['protein_halflife']
-        self.feature_info.loc[self.feature_info.is_phosphorylated, 'phosphorylation_rate'] = uniform(size=len(self.phosphorylated), high=20, low=10)
-        self.feature_info.loc[self.feature_info.is_phosphorylated, 'dephosphorylation_rate'] = uniform(size=len(self.phosphorylated), high=20, low=10)
+        finfo['effects_sums'] = 0
+        finfo['independence'] = 1
+        finfo['base_activity'] = 0
+        finfo['kinase_effects_sums'] = 0
+        finfo['kinase_base_activity'] = 0
+        finfo['phosphorylation_rate'] = 0
+        finfo['dephosphorylation_rate'] = 0
+        finfo['transcription_rate'] = uniform(size=nrows, high=20, low=10)
+        finfo['translation_rate'] = uniform(size=nrows, high=150, low=100)
+        finfo['mrna_halflife'] = uniform(size=nrows,  high=5, low=2.5)
+        finfo['protein_halflife'] = uniform(size=nrows, high=10, low=5)
+        finfo['splicing_rate'] = math.log(2) / 2
+        finfo['mrna_decay_rate'] = math.log(2) / self.feature_info['mrna_halflife']
+        finfo['protein_decay_rate'] = math.log(2) / self.feature_info['protein_halflife']
+        finfo.loc[finfo.is_phosphorylated, 'phosphorylation_rate'] = uniform(size=nphospho, high=20, low=10)
+        finfo.loc[finfo.is_phosphorylated, 'dephosphorylation_rate'] = uniform(size=nphospho, high=20, low=10)
+        
+        self.feature_info = finfo
         
     def sample_interactions(self):
         nrows = len(self.feature_network)
@@ -62,9 +66,8 @@ class Kinetics:
         fnet['effect'] = random.choices([-1, 1], weights=[0.25, 0.75], k=nrows)
         fnet['strength'] = 10 ** uniform(size=nrows, high=math.log10(100), low=math.log10(1))
         fnet['hill'] = truncnorm.rvs(1, 10, loc=2, scale=2, size=nrows)
-        
         self.feature_network = fnet
-        
+    
     def calc_dissociation(self):
         remove = ["max_premrna", "max_mrna", "max_protein", "dissociation", "k", "max_protein"]
         
@@ -81,10 +84,10 @@ class Kinetics:
         fnet['feature_id'] = fnet['to']
         
         self.feature_info, self.feature_network = finfo, fnet
-        
+    
     def calc_basal_activity(self, network, basal_col="basal"):
         basal_df = {"feature_id": [], basal_col: []}
-
+        
         for index, group in network[['feature_id', 'effect']].groupby(['feature_id']):
             effects = group.effect.unique()
             basal_df["feature_id"].append(index)
@@ -104,14 +107,19 @@ class Kinetics:
     
     def calc_effects_sums(self, network, effects_col="effects_sums"):
         # calculating effects sums
-        info = self.feature_info
-        info.index = info.feature_id
-
+        finfo = self.feature_info
+        
         for feature, group in network.groupby(['to']):
-            info.at[feature, effects_col] = sum(group.effect.values)
-
-        info.reset_index(inplace=True, drop=True)
-        self.feature_info = info
+            group = group.loc[group.effect > 0]
+            
+            if group.shape[0] == 0:
+                pos_effects_sums = 0
+            else:
+                pos_effects_sums = group['effect'].sum()
+            
+            finfo.loc[finfo.feature_id == feature, effects_col] = pos_effects_sums
+        
+        self.feature_info = finfo
     
     def calc_base_activity(self, base_active_col="base_activity", basal_col="basal", effects_col="effects_sums"):
         info = self.feature_info
@@ -119,6 +127,16 @@ class Kinetics:
         equal_or_below_zero = info[effects_col] <= 0
 
         info.loc[equal_or_below_zero, base_active_col] = info.loc[equal_or_below_zero, basal_col]
-        info.loc[above_zero, base_active_col] = info.loc[above_zero, basal_col] - info.loc[above_zero, 'independence'] ** info.loc[above_zero, effects_col]
+        info.loc[above_zero, base_active_col] = info.loc[above_zero,
+                                                         basal_col] - info.loc[above_zero,
+                                                                               'independence'] ** info.loc[above_zero, effects_col]
+        
         info.loc[info[base_active_col].isna(), base_active_col] = 1
         self.feature_info = info
+        
+    def sample_interaction_effects(self, row):
+        
+        if 'TF' in row['from'] and 'TF' in row['to']:
+            return random.choices([-1, 1], weights=[0.1, 0.9], k=1)[0]
+        else:
+            return random.choices([-1, 1], weights=[0.25, 0.75], k=1)[0]

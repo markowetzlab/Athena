@@ -74,12 +74,15 @@ class GuideRNA:
                 sim_i += 1 + adjust_interval
                 current_batch = sim_i // self.nsims_per_device
                 
-                sim_meta = {"feature_id": [], "perturbation": [], "sim_i": []}
+                sim_meta = {"feature_id": [], "perturbation": [],
+                            "sim_i": [], "sim_name": [], "grna": []}
                 feature = list(multiplier.columns.values + f"_{sim_i}") 
                 
                 sim_meta["feature_id"] = feature
                 sim_meta["perturbation"] = perturb_vec
+                sim_meta["grna"] = [grna] * len(feature)
                 sim_meta["sim_i"] = [sim_i] * len(feature)
+                sim_meta["sim_name"] = [row.sim_name] * len(feature)
                 
                 multi.append(pd.DataFrame(sim_meta))
                 
@@ -298,4 +301,5 @@ class GuideRNA:
         fp = os.path.join(self.multiplier_dir, f'batch_{prev_batch}.parquet')
         multi = pd.concat(multi, ignore_index=True)
         multi.to_parquet(fp, compression='brotli')
+        
         

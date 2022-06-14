@@ -40,10 +40,10 @@ __kernel void calc_propensities(__global int* effects,
         if (reaction_type[tid] == 0) {
             // calculate propensity function for constant reactions
             propensities[tid] = reaction_rates[tid] * species_state[species_index[tid]];
-        } else if (reaction_type[tid] == 1 && effect_sums[tid] == 0) {
+        } else if (reaction_type[tid] == 1 && nregulators[tid] == 0) {
             // basal expression propensity
             propensities[tid] = reaction_rates[tid] * basal[tid];
-        } else if (reaction_type[tid] == 1 && nregulators[tid] != 0 ){
+        } else if (reaction_type[tid] == 1 && nregulators[tid] != 0) {
             // arbritary N regulatory or protein interactions propensity function
             double numerator = 1.0;
             double denominator = 1.0;
@@ -60,7 +60,12 @@ __kernel void calc_propensities(__global int* effects,
             }
             
             // calculate propensity
-            numerator = base_activity[tid] + numerator;
+            if (effect_sums[tid] == 0){
+                numerator = basal[tid];
+            } else {
+                numerator = base_activity[tid] + numerator;
+            }
+            
             propensities[tid] = reaction_rates[tid] * (numerator / denominator);
 
             if (reversible_reaction[tid] == 1) {

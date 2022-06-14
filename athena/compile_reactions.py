@@ -90,15 +90,25 @@ class CompileReactions:
         
         return noise_info, noise_network
 
-    def create_species_vector(self, feature_info, file):
-        molecules = ['premrna', 'mrna', 'protein']
+    def create_species_vector(self, feature_info, file,  molecules=['premrna', 'mrna', 'protein']):
+        grna = list(feature_info.grna.values)
+        sim_name = list(feature_info.sim_name.values)
+        perturbation = list(feature_info.perturbation.values)
         mrna = list('mol_mrna_' + feature_info.feature_id.values)
         premrna = list('mol_premrna_' + feature_info.feature_id.values) 
         protein = list('mol_protein_' + feature_info.feature_id.values)
+        phospho_grna = list(feature_info.loc[feature_info.is_phosphorylated, 'grna'].values)
+        phospho_sim_name = list(feature_info.loc[feature_info.is_phosphorylated, 'sim_name'].values)
+        phospho_perturbation = list(feature_info.loc[feature_info.is_phosphorylated, 'perturbation'].values)
         phospho_protein = list('mol_phospho_protein_' + feature_info.loc[feature_info.is_phosphorylated, 'feature_id'].values)
-        species = premrna + mrna + protein + phospho_protein
         
-        species_state = pd.DataFrame({'species': species, 'state': [0] * len(species)})
+        grnas = grna * 3 + phospho_grna
+        sim_names = sim_name * 3 + phospho_sim_name
+        species = premrna + mrna + protein + phospho_protein
+        perturbations = perturbation * 3 + phospho_perturbation
+        
+        species_state = pd.DataFrame({'species': species, 'state': [0] * len(species),
+                                      'grna': grnas, 'sim_name': sim_names, 'perturbation': perturbations})
         species_state = self.manage_dtypes(species_state)
         
         species_state['gene'] = species_state['species'].apply(lambda x: '_'.join(x.split('_')[-3:-1]))
@@ -323,10 +333,9 @@ class CompileReactions:
         return df
     
     def get_perturbation(self, noise_info, file):
-        key_cols = ['feature_id', 'perturbation']
         sim_indices = noise_info.sim_i.unique()
         multi = pd.read_parquet(os.path.join(self.multiplier_dir, file))
-        multi = multi.loc[multi.sim_i.isin(sim_indices), key_cols]
+        multi = multi.loc[multi.sim_i.isin(sim_indices), ]
         noise_info = noise_info.merge(multi, on='feature_id', how='left')
         multi = None
         return noise_info

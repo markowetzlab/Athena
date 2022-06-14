@@ -5,49 +5,40 @@ import pandas as pd
 import scanpy as sc
 from tqdm import tqdm
 from multiprocessing import Pool, RLock
+from numpy.random import uniform, multinomial
 
 class Sampling:
     
-    def sample(self, ncells=10000, pop_fp=None, sim_fp=None, cache=True, return_data=False):
+    def sample(self, ncells=10000, pop_fp=None, cache=True, sim_fp=None):
         print (f"Simulation: {self.network_name} Sampling Cells...", flush=True)
         cells_meta, gene_expr = self.sampling_cells(ncells, sim_fp)
         
         print (f"Simulation: {self.network_name} Sampling Molecules...", flush=True)
-        lib_sizes = self.sampling_molecules(gene_expr, pop_fp)
+        gene_expr, lib_sizes = self.sampling_molecules(gene_expr, pop_fp)
         cells_meta = self.clean_cells_metadata(cells_meta, lib_sizes)
-        cells_meta = cells_meta.reset_index(drop=True)
         
         if cache:
             print (f"Simulation: {self.network_name} Caching....", flush=True)
-            cells_meta.to_csv(os.path.join(self.metadata_dir,
-                                           'cells_metadata.csv.gz'),
-                              compression='gzip', index=False)
+            cells_meta.to_csv(os.path.join(self.metadata_dir, 'cells_metadata.csv.bz2'), compression='bz2', index=False)
+            gene_expr.to_csv(os.path.join(self.metadata_dir, 'gene_expression.csv.bz2'), compression='bz2', index=False)
         
-        if return_data:
-            fp = os.path.join(self.metadata_dir, 'gene_expression.csv.gz')
-            gene_expr = pd.read_csv(fp, dtype=np.int16)
-            return cells_meta, gene_expr
-        else:
-            return None, None
+        return cells_meta, gene_expr
         
     def sampling_cells(self, ncells, sim_fp):
+        meta_fp = os.path.join(self.results_dir, 'cell_metadata.csv.gz')
         
         if sim_fp is None:
             sim_fp = os.path.join(self.results_dir, 'simulated_counts.csv.gz')
         
-        self.cell_sim_meta = pd.read_csv(f'{self.results_dir}/cell_metadata.csv.gz')
-        self.cell_sim_meta = self.cell_sim_meta.reset_index().rename(columns={'index': 'cell_i'})
-        
-        if ncells > self.cell_sim_meta.shape[0]:
+        cells_meta = pd.read_csv(meta_fp)\
+                       .reset_index()\
+                       .rename(columns={"index": "cell_i"})
+
+        if ncells > cells_meta.shape[0]:
             raise Exception(f"Simulation: {self.network_name} Number of cells requested is greater than the number of cells simulated. Sample fewer cells...")
-            
-        cells_meta = []
-        cells = np.array([i for i in range(self.cell_sim_meta.shape[0])])
-        cells_meta = self.get_cells_meta()
-        cells = self.sample_cells_per_grna(cells_meta, ncells)
         
-        cells_meta = cells_meta.iloc[cells]
-        gene_expr = self.load_cells(cells, sim_fp)
+        cells_meta = self.sample_cells_per_grna(cells_meta, ncells)
+        gene_expr = self.load_cells(cells_meta, sim_fp)
         
         return cells_meta, gene_expr
     
@@ -62,17 +53,18 @@ class Sampling:
         cell_umi = pop.obs.total_counts.values
         
         lib_size = self.calc_library_size(cell_umi, gene_expr)
-        self.downsampling(realcounts, gene_expr, lib_size)
+        simcounts_cpm = self.calc_cpm(realcounts, gene_expr)
+        downsampled_counts = self.downsampling(simcounts_cpm, lib_size)
+        gene_expr = pd.DataFrame(downsampled_counts, columns=gene_expr.columns, dtype=np.int16)
         
-        return lib_size
+        return gene_expr, lib_size
     
     def clean_cells_metadata(self, meta, lib_sizes):
         meta['lib_size'] = lib_sizes
-        meta['grna'] = meta['sim_label'].apply(lambda x: "_".join(x.split('_')[0:2]))
-        meta['target_gene'] = meta['sim_label'].apply(lambda x: x.split('-grna')[0])
+        meta['target_gene'] = meta['sim_name'].apply(lambda x: x.split('-grna')[0])
         
         if self.crispr_type == 'knockout':
-            meta['is_cell_perturbed'] = meta['sim_label'].apply(lambda x: x.split('_')[-1])
+            meta['is_cell_perturbed'] = meta['sim_name'].apply(lambda x: x.split('_')[-1])
             meta.loc[meta.target_gene == self.ctrl_label, 'is_cell_perturbed'] = self.ctrl_label
         else:
             meta['is_cell_perturbed'] = 'PRT'
@@ -81,118 +73,71 @@ class Sampling:
         meta = meta.reset_index(drop=True)
         return meta
     
-    def load_cells(self, sampled_cells, sim_fp):
+    def load_cells(self, cells_meta, sim_fp):
         df = pd.read_csv(sim_fp, dtype=np.int16)
-        df = df.iloc[sampled_cells]
+        df = df.iloc[cells_meta.cell_i.values]
         
         return df
         
     def calc_library_size(self, cell_umis, sim_counts):
-        sim_counts_ls = sim_counts.sum(axis=1).values
         
         if self.map_reference_ls:
             # sampling library
-            sim_probs = np.random.uniform(size=len(sim_counts_ls))
+            nlibs = sim_counts.shape[0]
+            sim_probs = uniform(size=nlibs).astype(np.float16)
             lib_size = np.around(np.quantile(cell_umis, sim_probs))
         else:
-            lib_size = sim_counts_ls
+            lib_size = sim_counts.sum(axis=1).values
         
         return lib_size
     
-    def downsampling(self, realcount, sim_counts, lib_sizes, cache_size=100000):
-        gene_expr = []
-        sim_cols = list(sim_counts.columns)
-        real_cpm = self.get_real_cpm(realcount)
-        gene_expr_fp = os.path.join(self.metadata_dir, 'gene_expression.csv.gz')
+    def calc_cpm(self, realcount, sim_counts):
+        realcount_ls = np.sum(realcount, axis=1).reshape(-1, 1)
+        sim_counts_ls = sim_counts.sum(axis=1).values.reshape(-1, 1)
         
-        if len(lib_sizes) < cache_size:
-            cache_size = round(len(lib_sizes) / 2)
-        
-        sizes = [lib_sizes[i:i+cache_size-1] for i in range(0, len(lib_sizes), cache_size)]
-        counts = [sim_counts.iloc[i:i+cache_size-1, :] for i in range(0, len(sim_counts), cache_size)]
-        
-        for i in tqdm(range(len(sizes))):
-            df = counts[i]
-            lib_size = np.array(sizes[i])
-            cpm = df / lib_size.reshape(-1, 1)
-            cpm = self.calc_cpm(cpm, real_cpm)
-            
-            # sample molecules
-            for index, size in enumerate(lib_size):
-                gene_val = cpm[index, ]
-                gene_expr = np.random.multinomial(size, gene_val)
-                cpm[index, ] = gene_expr
-            
-            
-            gene_expr = pd.DataFrame(cpm, columns=sim_cols, dtype=np.int16)
-            self.cache_dataframe(gene_expr, gene_expr_fp)
-    
-    def get_real_cpm(self, realcount):
-        # calculating realcount datasets cpm
-        real_ls = np.sum(realcount, axis=1).reshape(-1, 1)
-        real_cpm = realcount / real_ls
-        real_cpm = real_cpm.flatten()
-        real_cpm = real_cpm[real_cpm != 0]
-    
-        return real_cpm
-    
-    def calc_cpm(self, scpm, rcpm):
+        realcount_cpm = realcount / realcount_ls
+        sim_counts_cpm = sim_counts / sim_counts_ls
         
         if self.map_reference_cpm:
-             # sort sim counts data via least to greatest
-            rcpm = rcpm.flatten()
-            sim_shape = scpm.shape
-            scpm_size = sim_shape[0] * sim_shape[1]
+            # sort sim counts data via least to greatest
+            sim_shape = sim_counts.shape
+            realcount_cpm = realcount_cpm.flatten()
+            sim_cpm_size = sim_shape[0] * sim_shape[1]
             
-            probs = np.random.uniform(size=scpm_size)
-            scpm = np.quantile(rcpm, probs).reshape(sim_shape)
-            scpm = scpm / np.sum(scpm, axis=1).reshape(-1, 1)
+            realcount_cpm = realcount_cpm[realcount_cpm != 0]
+            sim_probs = uniform(size=sim_cpm_size).astype(np.float16)
+            sim_counts_cpm = np.quantile(realcount_cpm, sim_probs).reshape(sim_shape)
+            sim_counts_cpm = sim_counts_cpm / np.sum(sim_counts_cpm, axis=1).reshape(-1, 1)
         
-        return scpm
+        return sim_counts_cpm
+    
+    def downsampling(self, sim_counts_cpm, lib_sizes):
+        
+        for index, lib_size in tqdm(enumerate(lib_sizes)):
+            gene_val = sim_counts_cpm[index, ]
+            gene_expr = multinomial(lib_size, gene_val).astype(np.int16)
+            sim_counts_cpm[index, ] = gene_expr
+        
+        return sim_counts_cpm
     
     def sample_cells_per_grna(self, cells_meta, ncells):
         sampled_cells = []
-        ngrnas = len(self.sim_meta.grna.unique())
-        self.ncells_per_grna = round(ncells / ngrnas)
+        grnas = cells_meta.grna.unique()
+        ncells_per_grna = round(ncells / len(grnas))
         
         for row_i in range(len(self.sim_meta)):
             row = self.sim_meta.iloc[row_i]
-            sim_cells = cells_meta.loc[cells_meta.sim_label == row.sim_name, 'cell_i'].values
+            sim_cells = cells_meta.loc[cells_meta.sim_name == row.sim_name, 'cell_i'].values
             sim_cells = list(sim_cells)
             
-            if len(sim_cells) < self.ncells_per_grna:
+            if len(sim_cells) < ncells_per_grna:
                 print ("changing ncells_per_grna...")
-                self.ncells_per_grna = len(sim_cells)            
+                ncells_per_grna = len(sim_cells)            
 
             if row.sample_percent != 0:
-                n = int(self.ncells_per_grna * row.sample_percent)
+                n = int(ncells_per_grna * row.sample_percent)
                 sampled = random.sample(sim_cells, k=n)
                 sampled_cells = sampled_cells + sampled
         
-        return sampled_cells
-    
-    def get_cells_meta(self):
-        cells_meta = []
-        ncells_per_sim = int(self.perturb_time / self.update_interval)
-
-        for row_i, row in self.sim_meta.iterrows():
-            nsims_adjust = 1 + self.sim_meta.nsims.iloc[:row_i].sum()
-
-            for row_sim_i in range(row.nsims):
-                row_sim_i = row_sim_i + nsims_adjust
-                cell_sim_meta = self.cell_sim_meta.loc[self.cell_sim_meta.sim_i == row_sim_i]
-
-                for cell_i in range(cell_sim_meta.shape[0]):
-                    cells_meta.append({"cell_i": cell_sim_meta.iloc[cell_i].cell_i,
-                                       "sim_i": cell_sim_meta.iloc[cell_i].sim_i,
-                                       "sim_label": row.sim_name, 
-                                       "grna_label": row.grna})
-                    
-        return pd.DataFrame(cells_meta)
-
-    def cache_dataframe(self, df, fp):
-        
-        if os.path.exists(fp):
-            df.to_csv(fp, mode='a', index=False, header=False, compression='gzip')
-        else:
-            df.to_csv(fp, index=False, compression='gzip')
+        cells_meta = cells_meta.iloc[sampled_cells]
+        return cells_meta
