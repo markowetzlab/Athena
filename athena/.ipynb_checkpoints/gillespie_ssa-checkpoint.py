@@ -167,7 +167,9 @@ class GillespieSSA:
         return not_perturbed, prop_params
     
     def cache_results(self, device_n, time_index, cache_interval, cache_species, species_array, results, result_index):
-        
+        fp = os.path.join(self.results_dir, 'simulated_counts.csv.gz')
+        meta_fp = os.path.join(self.results_dir, 'cell_metadata.csv.gz')
+            
         if (time_index >= self.sample_time) and (time_index % self.update_interval == 0):
             results[cache_interval] = species_array.get()[result_index]
             
@@ -177,11 +179,7 @@ class GillespieSSA:
                 for sim in sims:
                     spec = cache_species.loc[cache_species.sim_i == sim,]
                     sim_res = results[:, spec.index]
-                    colnames = list(spec.spec_name.values)
-                    fp = os.path.join(self.results_dir, f'simulated_counts.csv.gz')
-                    meta_fp = os.path.join(self.results_dir, f'cell_metadata.csv.gz')
-                    
-                    df = pd.DataFrame(sim_res, columns=colnames)
+                    df = pd.DataFrame(sim_res, columns=spec.spec_name.values)
                     
                     if self.collapse_mrna:
                         spec = spec.sort_values(by=['gene'])
@@ -191,7 +189,7 @@ class GillespieSSA:
                     
                     df = df.apply(pd.to_numeric)
                     df = self.manage_dtypes(df)
-                    cell_meta = pd.DataFrame({'sim_i': [sim] * df.shape[0]})
+                    cell_meta = self.get_cells_meta(spec, sim, df.shape[0])
                     
                     if os.path.exists(fp):
                         df.to_csv(fp, mode='a', index=False, header=False, compression='gzip')
@@ -207,6 +205,19 @@ class GillespieSSA:
         
         return cache_interval, results
     
+    def get_cells_meta(self, spec, sim_i, nrows):
+        grna = spec.grna.unique()[0]
+        sim_name = spec.sim_name.unique()[0]
+        perturbation = spec.perturbation.sort_values().unique()[0]
+        
+        cell_meta = pd.DataFrame({'grna': [grna] * nrows,
+                                  'sim_i': [sim_i] * nrows,
+                                  'sim_name': [sim_name] * nrows,
+                                  'perturbation': [perturbation] * nrows})
+        
+        return cell_meta
+        
+
     def get_gpu_context(self):
         context = cl.create_some_context(True)
         
