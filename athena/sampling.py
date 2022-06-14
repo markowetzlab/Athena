@@ -9,19 +9,26 @@ from numpy.random import uniform, multinomial
 
 class Sampling:
     
-    def sample(self, ncells=10000, pop_fp=None, cache=True, sim_fp=None):
+    def sample(self, ncells=10000, pop_fp=None, sim_fp=None, cache=True, return_data=False):
         print (f"Simulation: {self.network_name} Sampling Cells...", flush=True)
         cells_meta, gene_expr = self.sampling_cells(ncells, sim_fp)
+        
         print (f"Simulation: {self.network_name} Sampling Molecules...", flush=True)
-        gene_expr, lib_sizes = self.sampling_molecules(gene_expr, pop_fp)
+        lib_sizes = self.sampling_molecules(gene_expr, pop_fp)
         cells_meta = self.clean_cells_metadata(cells_meta, lib_sizes)
         
         if cache:
             print (f"Simulation: {self.network_name} Caching....", flush=True)
-            cells_meta.to_csv(os.path.join(self.metadata_dir, 'cells_metadata.csv.bz2'), compression='bz2', index=False)
-            gene_expr.to_csv(os.path.join(self.metadata_dir, 'gene_expression.csv.bz2'), compression='bz2', index=False)
+            cells_meta.to_csv(os.path.join(self.metadata_dir,
+                                           'cells_metadata.csv.gz'),
+                              compression='gzip', index=False)
         
-        return cells_meta, gene_expr
+        if return_data:
+            fp = os.path.join(self.metadata_dir, 'gene_expression.csv.gz')
+            gene_expr = pd.read_csv(fp, dtype=np.int16)
+            return cells_meta, gene_expr
+        else:
+            return None, None
         
     def sampling_cells(self, ncells, sim_fp):
         meta_fp = os.path.join(self.results_dir, 'cell_metadata.csv.gz')
@@ -52,11 +59,8 @@ class Sampling:
         cell_umi = pop.obs.total_counts.values
         
         lib_size = self.calc_library_size(cell_umi, gene_expr)
-        simcounts_cpm = self.calc_cpm(realcounts, gene_expr)
-        downsampled_counts = self.downsampling(simcounts_cpm, lib_size)
-        gene_expr = pd.DataFrame(downsampled_counts, columns=gene_expr.columns, dtype=np.int16)
-        
-        return gene_expr, lib_size
+        self.downsampling(realcounts, gene_expr, lib_size)
+        return lib_size
     
     def clean_cells_metadata(self, meta, lib_sizes):
         meta['lib_size'] = lib_sizes
@@ -90,34 +94,55 @@ class Sampling:
         
         return lib_size
     
-    def calc_cpm(self, realcount, sim_counts):
-        realcount_ls = np.sum(realcount, axis=1).reshape(-1, 1)
-        sim_counts_ls = sim_counts.sum(axis=1).values.reshape(-1, 1)
+    def downsampling(self, realcount, sim_counts, lib_sizes, cache_size=100000):
+        gene_expr = []
+        sim_cols = list(sim_counts.columns)
+        real_cpm = self.get_real_cpm(realcount)
+        gene_expr_fp = os.path.join(self.metadata_dir, 'gene_expression.csv.gz')
         
-        realcount_cpm = realcount / realcount_ls
-        sim_counts_cpm = sim_counts / sim_counts_ls
+        if len(lib_sizes) < cache_size:
+            cache_size = round(len(lib_sizes) / 2)
+        
+        sizes = [lib_sizes[i:i+cache_size-1] for i in range(0, len(lib_sizes), cache_size)]
+        counts = [sim_counts.iloc[i:i+cache_size-1, :] for i in range(0, len(sim_counts), cache_size)]
+        
+        for i in tqdm(range(len(sizes))):
+            df = counts[i]
+            lib_size = np.array(sizes[i])
+            cpm = df / lib_size.reshape(-1, 1)
+            cpm = self.calc_cpm(cpm, real_cpm)
+            # sample molecules
+            for index, size in enumerate(lib_size):
+                gene_val = cpm[index, ]
+                gene_expr = np.random.multinomial(size, gene_val)
+                cpm[index, ] = gene_expr
+            
+            
+            gene_expr = pd.DataFrame(cpm, columns=sim_cols, dtype=np.int16)
+            self.cache_dataframe(gene_expr, gene_expr_fp)
+    
+    def get_real_cpm(self, realcount):
+        # calculating realcount datasets cpm
+        real_ls = np.sum(realcount, axis=1).reshape(-1, 1)
+        real_cpm = realcount / real_ls
+        real_cpm = real_cpm.flatten()
+        real_cpm = real_cpm[real_cpm != 0]
+    
+        return real_cpm
+    
+    def calc_cpm(self, scpm, rcpm):
         
         if self.map_reference_cpm:
-            # sort sim counts data via least to greatest
-            sim_shape = sim_counts.shape
-            realcount_cpm = realcount_cpm.flatten()
-            sim_cpm_size = sim_shape[0] * sim_shape[1]
+             # sort sim counts data via least to greatest
+            rcpm = rcpm.flatten()
+            sim_shape = scpm.shape
+            scpm_size = sim_shape[0] * sim_shape[1]
             
-            realcount_cpm = realcount_cpm[realcount_cpm != 0]
-            sim_probs = uniform(size=sim_cpm_size).astype(np.float16)
-            sim_counts_cpm = np.quantile(realcount_cpm, sim_probs).reshape(sim_shape)
-            sim_counts_cpm = sim_counts_cpm / np.sum(sim_counts_cpm, axis=1).reshape(-1, 1)
+            probs = np.random.uniform(size=scpm_size)
+            scpm = np.quantile(rcpm, probs).reshape(sim_shape)
+            scpm = scpm / np.sum(scpm, axis=1).reshape(-1, 1)
         
-        return sim_counts_cpm
-    
-    def downsampling(self, sim_counts_cpm, lib_sizes):
-        
-        for index, lib_size in tqdm(enumerate(lib_sizes)):
-            gene_val = sim_counts_cpm[index, ]
-            gene_expr = multinomial(lib_size, gene_val).astype(np.int16)
-            sim_counts_cpm[index, ] = gene_expr
-        
-        return sim_counts_cpm
+        return scpm
     
     def sample_cells_per_grna(self, cells_meta, ncells):
         sampled_cells = []
@@ -159,3 +184,10 @@ class Sampling:
                                        "grna_label": row.grna})
                     
         return pd.DataFrame(cells_meta)
+
+    def cache_dataframe(self, df, fp):
+        
+        if os.path.exists(fp):
+            df.to_csv(fp, mode='a', index=False, header=False, compression='gzip')
+        else:
+            df.to_csv(fp, index=False, compression='gzip')
