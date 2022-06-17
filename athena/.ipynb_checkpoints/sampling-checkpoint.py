@@ -105,16 +105,22 @@ class Sampling:
             sim_cpm_size = sim_shape[0] * sim_shape[1]
             
             realcount_cpm = realcount_cpm[realcount_cpm != 0]
+            
+            print ('Sampling Probabilities...', flush=True)
             sim_probs = uniform(size=sim_cpm_size).astype(np.float16)
-            sim_counts_cpm = np.quantile(realcount_cpm, sim_probs).reshape(sim_shape)
-            sim_counts_cpm = sim_counts_cpm / np.sum(sim_counts_cpm, axis=1).reshape(-1, 1)
+            
+            print ('Fetching Quantiles...', flush=True)
+            sim_counts_cpm = np.quantile(realcount_cpm, sim_probs).astype(np.float16).reshape(sim_shape)
+            sim_counts_cpm = sim_counts_cpm / np.sum(sim_counts_cpm, axis=1).astype(np.float16).reshape(-1, 1)
         
         return sim_counts_cpm
     
     def downsampling(self, sim_counts_cpm, lib_sizes):
+        print ('Downsampling Counts...', flush=True)
         
         for index, lib_size in tqdm(enumerate(lib_sizes)):
             gene_val = sim_counts_cpm[index, ]
+            gene_val = gene_val.astype(np.float64)
             gene_expr = multinomial(lib_size, gene_val).astype(np.int16)
             sim_counts_cpm[index, ] = gene_expr
         
