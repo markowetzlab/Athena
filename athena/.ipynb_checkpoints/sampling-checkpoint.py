@@ -121,8 +121,10 @@ class Sampling:
         for index, lib_size in tqdm(enumerate(lib_sizes)):
             gene_val = sim_counts_cpm[index, ]
             gene_val = gene_val.astype(np.float64)
+            gene_val = gene_val / sum(gene_val)
+            
             gene_expr = multinomial(lib_size, gene_val).astype(np.int16)
-            sim_counts_cpm[index, ] = gene_expr
+            sim_counts_cpm[index, ] = gene_expr        
         
         return sim_counts_cpm
     
