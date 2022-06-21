@@ -110,7 +110,9 @@ class Sampling:
             sim_probs = uniform(size=sim_cpm_size).astype(np.float16)
             
             print ('Fetching Quantiles...', flush=True)
-            sim_counts_cpm = np.quantile(realcount_cpm, sim_probs).astype(np.float16).reshape(sim_shape)
+            sim_counts_cpm = np.quantile(realcount_cpm.astype(np.float16), sim_probs).astype(np.float16).reshape(sim_shape)
+            
+            print ('Reshape into Expression Matrix...', flush=True)
             sim_counts_cpm = sim_counts_cpm / np.sum(sim_counts_cpm, axis=1).astype(np.float16).reshape(-1, 1)
         
         return sim_counts_cpm
