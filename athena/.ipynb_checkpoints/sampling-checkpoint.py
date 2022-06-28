@@ -9,12 +9,16 @@ from numpy.random import uniform, multinomial
 
 class Sampling:
     
-    def sample(self, ncells=10000, pop_fp=None, cache=True, sim_fp=None):
+    def sample(self, res_dir=None, ncells=10000, lambda_ls=0, cache=True, pop_fp=None, map_ls=True):
+        
+        if res_dir is None:
+            res_dir = self.results_dir
+        
         print (f"Simulation: {self.network_name} Sampling Cells...", flush=True)
-        cells_meta, gene_expr = self.sampling_cells(ncells, sim_fp)
+        cells_meta, gene_expr = self.sampling_cells(ncells, res_dir)
         
         print (f"Simulation: {self.network_name} Sampling Molecules...", flush=True)
-        gene_expr, lib_sizes = self.sampling_molecules(gene_expr, pop_fp)
+        gene_expr, lib_sizes = self.sampling_molecules(gene_expr, map_ls, lambda_ls, pop_fp)
         cells_meta = self.clean_cells_metadata(cells_meta, lib_sizes)
         
         if cache:
@@ -24,11 +28,9 @@ class Sampling:
         
         return cells_meta, gene_expr
         
-    def sampling_cells(self, ncells, sim_fp):
-        meta_fp = os.path.join(self.results_dir, 'cell_metadata.csv.gz')
-        
-        if sim_fp is None:
-            sim_fp = os.path.join(self.results_dir, 'simulated_counts.csv.gz')
+    def sampling_cells(self, ncells, sim_dir):
+        meta_fp = os.path.join(sim_dir, 'cell_metadata.csv.gz')
+        sim_fp = os.path.join(sim_dir, 'simulated_counts.csv.gz')
         
         cells_meta = pd.read_csv(meta_fp)\
                        .reset_index()\
@@ -42,7 +44,7 @@ class Sampling:
         
         return cells_meta, gene_expr
     
-    def sampling_molecules(self, gene_expr, pop_fp=None):
+    def sampling_molecules(self, gene_expr, map_ls, lambda_ls, pop_fp=None):
         
         if pop_fp is None:
             pop = sc.read_loom(self.pop_fp)
@@ -50,10 +52,10 @@ class Sampling:
             pop = sc.read_loom(pop_fp)
         
         realcounts = pop.X.toarray()
-        cell_umi = pop.obs.total_counts.values
+        cell_umis = pop.obs.total_counts.values
         
-        lib_size = self.calc_library_size(cell_umi, gene_expr)
         simcounts_cpm = self.calc_cpm(realcounts, gene_expr)
+        lib_size = self.calc_library_size(cell_umis, gene_expr, map_ls, lambda_ls)
         downsampled_counts = self.downsampling(simcounts_cpm, lib_size)
         gene_expr = pd.DataFrame(downsampled_counts, columns=gene_expr.columns, dtype=np.int16)
         
@@ -79,13 +81,17 @@ class Sampling:
         
         return df
         
-    def calc_library_size(self, cell_umis, sim_counts):
+    def calc_library_size(self, cell_umis, sim_counts, map_ls, lambda_ls):
+        nlibs = sim_counts.shape[0]
         
-        if self.map_reference_ls:
+        if map_ls and lambda_lib_size == 0:
             # sampling library
-            nlibs = sim_counts.shape[0]
             sim_probs = uniform(size=nlibs).astype(np.float16)
             lib_size = np.around(np.quantile(cell_umis, sim_probs))
+        
+        elif lambda_ls != 0:
+            lib_size = np.random.poisson(lambda_ls, size=nlibs)
+            
         else:
             lib_size = sim_counts.sum(axis=1).values
         

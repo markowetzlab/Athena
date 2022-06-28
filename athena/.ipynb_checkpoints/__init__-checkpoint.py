@@ -225,7 +225,6 @@ class Athena(Network, Kinetics, GuideRNA, CompileReactions, GillespieSSA, Sampli
             lib_fp = os.path.join(self.grna_libraries_dir, self.grna_library_name)
         
         self.grna_library = pd.read_csv(lib_fp).drop(columns=['Unnamed: 0'])
-        probs = self.grna_library.probability
         
         if (target_genes is None) and perturb_tfs:
             self.perturb_tfs = perturb_tfs
@@ -236,10 +235,10 @@ class Athena(Network, Kinetics, GuideRNA, CompileReactions, GillespieSSA, Sampli
         if (type(target_genes) is list) and (len(target_genes) != 0):
             self.target_genes = target_genes
         
-        if (not on_target is None) and (type(on_target) is float):
+        if (not on_target is None) and (type(on_target) is float) and (on_target <= 1) and (on_target >= 0):
             self.on_target = on_target
         
-        if (not off_target is None) and (type(off_target) is int):
+        if (not off_target is None) and (type(off_target) is float) and (off_target <= 1) and (off_target >= 0):
             self.off_target = off_target
         
         if ngrnas_per_target < 0:

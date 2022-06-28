@@ -7,6 +7,10 @@ import itertools as it
 
 class GuideRNA:
     
+    """
+        Issues with specificity score is not an one to one mapping in simulations as compared to real world data.
+    """
+    
     def generate_grnas(self, crispr_type=None, on_target=None, off_target=None):
         
         self.check_crispr_type(crispr_type)
@@ -21,8 +25,7 @@ class GuideRNA:
         self.ngrnas = len(grna_names)
         
         grna_meta = self.get_perturbed_genes(grna_names)
-        grna_meta = self.sample_on_target(grna_meta)
-        self.grna_meta = pd.DataFrame(grna_meta)
+        self.grna_meta = self.sample_on_target(grna_meta)
         
         if self.crispr_type == 'activation':
             self.grna_meta['on_target'] = (1 - self.grna_meta['on_target']) + 1
@@ -109,30 +112,41 @@ class GuideRNA:
     
     def sample_off_target(self, target_gene, grna):
         genes_to_add = []
-        genes = list(self.feature_info.feature_id.values)
-        off_target_genes = random.sample(genes, k=self.off_target)
+        perturb_activity = 0
+        info = self.feature_info
+        specifity_score = 1 - self.off_target
+        ngenes = random.sample([i for i in range(1, 11)], k=1)[0]
+        off_act = (1 - specifity_score) / specifity_score
+        genes = random.sample(list(info.loc[info.feature_id != target_gene,'feature_id'].values), k=ngenes)
         
-        for index, gene in enumerate(off_target_genes):
-            if gene == target_gene:
-                continue
-           
-            genes_to_add.append({'grna': grna, 'perturbed_gene': gene, 'on_target': 0, 'target': False})
+        for index, gene in enumerate(genes):
             
-        if len(genes_to_add) != self.off_target:
-            genes_to_add = self.sample_off_target(target_gene, grna)
+            if (index + 1) == ngenes:
+                perturb_activity = 1 - off_act
+            else:
+                perturb_activity = np.random.uniform(high=off_act, size=1)[0]
+                perturb_activity = round(perturb_activity, 2)
+
+                off_act = round(off_act - perturb_activity, 2)
+                perturb_activity = round(1 - perturb_activity, 2)
+            
+            if perturb_activity != 1:
+                genes_to_add.append({'grna': grna, 
+                                     'perturbed_gene': gene,
+                                     'on_target': perturb_activity,
+                                     'target': False})
         
         return genes_to_add
     
     def sample_on_target(self, grna_meta):
+        grna_meta = pd.DataFrame(grna_meta)
         probs = self.grna_library.probability
         on_target_scores = self.grna_library.on_target / 100
         
-        for index, meta in enumerate(grna_meta):
-            
-            if not meta['target'] and meta['perturbed_gene'] != self.ctrl_label:
-                meta['on_target'] = random.choices(on_target_scores, weights=probs, k=1)[0]
-            
-            grna_meta[index] = meta
+        nsamples = grna_meta.loc[grna_meta.on_target.isna()].shape[0]
+        grna_meta.loc[grna_meta.on_target.isna(), 'on_target'] = random.choices(on_target_scores,
+                                                                                weights=probs,
+                                                                                k=nsamples)
         
         return grna_meta
     
@@ -211,7 +225,6 @@ class GuideRNA:
         sample_perc = []
 
         for row_i, rowname in enumerate(multiplier.index):
-
             grna_label = "_".join(rowname.split("_")[:2])
             grna = grna_meta.loc[grna_meta.grna == grna_label].copy()
             ngenes = grna.shape[0]
@@ -226,7 +239,6 @@ class GuideRNA:
                         sample_perc.append(1)
                     else:
                         sample_perc.append(grna.on_target.values[0])
-                    
                 else:
                     if grna.on_target.values[0] == 0:
                         sample_perc.append(0)
@@ -284,18 +296,19 @@ class GuideRNA:
                 raise Exception("crispr_type parameter must be either: activation, interference, or knockout...")
                 
     def check_target_scores(self, on_target, off_target):
+        probs = self.grna_library.probability
         
-        if (not on_target is None) and (type(on_target) is float):
+        if (not on_target is None) and (type(on_target) is float) and (on_target <= 1) and (on_target >= 0):
             self.on_target = on_target
         
-        if (not off_target is None) and (type(off_target) is int):
+        if (not off_target is None) and (type(off_target) is float) and (off_target <= 1) and (off_target >= 0):
             self.off_target = off_target
-        
+                
         if self.off_target is None:
-            self.off_target = random.choices(self.grna_library.off_target, weights=probs, k=1)[0]
+            self.off_target = random.choices(self.grna_library.off_target, weight=probs, k=1)[0]
         
         if self.on_target is None:
-            self.on_target = random.choices(self.grna_library.on_target, weights=probs, k=1)[0]
+            self.on_target = random.choices(self.grna_library.on_target, weight=probs, k=1)[0]
             
     def cache_multiplier(self, multi, prev_batch):
         fp = os.path.join(self.multiplier_dir, f'batch_{prev_batch}.parquet')
