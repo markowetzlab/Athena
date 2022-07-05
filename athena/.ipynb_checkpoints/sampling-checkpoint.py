@@ -9,13 +9,16 @@ from numpy.random import uniform, multinomial
 
 class Sampling:
     
-    def sample(self, res_dir=None, ncells=10000, lambda_ls=0, cache=True, pop_fp=None, map_ls=True):
+    def sample(self, sim_meta=None, res_dir=None, ncells=10000, lambda_ls=0, cache=True, pop_fp=None, map_ls=True):
         
         if res_dir is None:
             res_dir = self.results_dir
+            
+        if sim_meta is None:
+            sim_meta = self.sim_meta
         
         print (f"Simulation: {self.network_name} Sampling Cells...", flush=True)
-        cells_meta, gene_expr = self.sampling_cells(ncells, res_dir)
+        cells_meta, gene_expr = self.sampling_cells(sim_meta, ncells, res_dir)
         
         print (f"Simulation: {self.network_name} Sampling Molecules...", flush=True)
         gene_expr, lib_sizes = self.sampling_molecules(gene_expr, map_ls, lambda_ls, pop_fp)
@@ -28,7 +31,7 @@ class Sampling:
         
         return cells_meta, gene_expr
         
-    def sampling_cells(self, ncells, sim_dir):
+    def sampling_cells(self, sim_meta, ncells, sim_dir):
         meta_fp = os.path.join(sim_dir, 'cell_metadata.csv.gz')
         sim_fp = os.path.join(sim_dir, 'simulated_counts.csv.gz')
         
@@ -39,7 +42,7 @@ class Sampling:
         if ncells > cells_meta.shape[0]:
             raise Exception(f"Simulation: {self.network_name} Number of cells requested is greater than the number of cells simulated. Sample fewer cells...")
         
-        cells_meta = self.sample_cells_per_grna(cells_meta, ncells)
+        cells_meta = self.sample_cells_per_grna(sim_meta, cells_meta, ncells)
         gene_expr = self.load_cells(cells_meta, sim_fp)
         
         return cells_meta, gene_expr
@@ -136,13 +139,13 @@ class Sampling:
         
         return sim_counts_cpm
     
-    def sample_cells_per_grna(self, cells_meta, ncells):
+    def sample_cells_per_grna(self, sim_meta, cells_meta, ncells):
         sampled_cells = []
         grnas = cells_meta.grna.unique()
         ncells_per_grna = round(ncells / len(grnas))
         
-        for row_i in range(len(self.sim_meta)):
-            row = self.sim_meta.iloc[row_i]
+        for row_i in range(sim_meta.shape[0]):
+            row = sim_meta.iloc[row_i]
             sim_cells = cells_meta.loc[cells_meta.sim_name == row.sim_name, 'cell_i'].values
             sim_cells = list(sim_cells)
             
