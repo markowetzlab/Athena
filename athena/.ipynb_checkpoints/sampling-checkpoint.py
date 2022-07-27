@@ -155,7 +155,7 @@ class Sampling:
 
             if row.sample_percent != 0:
                 n = int(ncells_per_grna * row.sample_percent)
-                sampled = random.sample(sim_cells, k=n)
+                sampled = random.choices(sim_cells, k=n)
                 sampled_cells = sampled_cells + sampled
         
         cells_meta = cells_meta.iloc[sampled_cells]
