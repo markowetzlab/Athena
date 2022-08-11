@@ -1,0 +1,12 @@
+grna,perturbed_gene,on_target,target
+CTRL-grna.1,CTRL,1.0,False
+TF_0-grna.1,TF_0,0.0,True
+TF_1-grna.1,TF_1,0.0,True
+TF_2-grna.1,TF_2,0.0,True
+TF_3-grna.1,TF_3,0.0,True
+TF_4-grna.1,TF_4,0.0,True
+TF_5-grna.1,TF_5,0.0,True
+TF_6-grna.1,TF_6,0.0,True
+TF_7-grna.1,TF_7,0.0,True
+TF_8-grna.1,TF_8,0.0,True
+TF_9-grna.1,TF_9,0.0,True

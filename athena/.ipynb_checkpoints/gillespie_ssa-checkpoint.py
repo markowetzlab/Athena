@@ -18,6 +18,7 @@ class GillespieSSA:
     def simulate(self, batch_number):
         # Setup Simulation Context and Parameters
         print ("Creating Command Queue...")
+        sample_time = self.sample_time
         context, program, cache_interval, not_perturbed, time_span = self.setup_simulation()
         
         with cl.CommandQueue(context) as queue:
@@ -37,11 +38,11 @@ class GillespieSSA:
 
                 # cache result and introduce perturbation to simulation
                 not_perturbed, prop_params = self.perturb_reactions(queue, time_index, not_perturbed, prop_params, prop_df)
-                cache_interval, results = self.cache_results(batch_number, time_index, cache_interval, cache_species, 
-                                                             species_array, results, result_index)
+                cache_interval, results, sample_time = self.cache_results(batch_number, time_index, cache_interval, cache_species, 
+                                                                          species_array, results, result_index, sample_time)
             
-            cache_interval, results = self.cache_results(batch_number, time_index, cache_interval, cache_species, 
-                                                         species_array, results, result_index)
+            cache_interval, results, sample_time = self.cache_results(batch_number, time_index, cache_interval, cache_species, 
+                                                                      species_array, results, result_index, sample_time)
     
     def setup_simulation(self):
         cache_interval = 0
@@ -166,11 +167,12 @@ class GillespieSSA:
         
         return not_perturbed, prop_params
     
-    def cache_results(self, device_n, time_index, cache_interval, cache_species, species_array, results, result_index):
+    def cache_results(self, device_n, time_index, cache_interval, cache_species, species_array, results, result_index, sample_time):
         fp = os.path.join(self.results_dir, 'simulated_counts.csv.gz')
         meta_fp = os.path.join(self.results_dir, 'cell_metadata.csv.gz')
             
-        if (time_index >= self.sample_time) and (time_index % self.update_interval == 0):
+        if time_index >= sample_time:
+            sample_time += self.update_interval
             results[cache_interval] = species_array.get()[result_index]
             
             if cache_interval == (results.shape[0] - 1):
@@ -203,7 +205,7 @@ class GillespieSSA:
             else:
                 cache_interval += 1
         
-        return cache_interval, results
+        return cache_interval, results, sample_time
     
     def get_cells_meta(self, spec, sim_i, nrows):
         grna = spec.grna.unique()[0]

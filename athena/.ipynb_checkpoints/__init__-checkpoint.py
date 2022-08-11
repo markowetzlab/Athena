@@ -292,7 +292,7 @@ class Athena(Network, Kinetics, GuideRNA, CompileReactions, GillespieSSA, Sampli
         self.save_protein = save_protein
         self.cache_interval = cache_interval
         self.update_interval = update_interval
-        self.nsims_per_condition = int(ncells_per_condition / (perturb_time / update_interval))
+        self.nsims_per_condition = int(ncells_per_condition / (sample_time / update_interval))
         
         # setting simulation time
         self.perturb_time = burn_time
