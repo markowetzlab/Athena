@@ -63,16 +63,21 @@ class Kinetics:
         self.feature_info = finfo
         
     def sample_interactions(self):
+        
         nrows = len(self.feature_network)
         fnet = self.feature_network.copy(deep=True)
+        tfs = self.feature_info.loc[self.feature_info.is_tf, 'feature_id'].values
+        ntf_edges = fnet.loc[fnet['from'].isin(tfs)].shape[0]
         
         fnet['basal'] = 0
         fnet['effect'] = random.choices([-1, 1], weights=[0.25, 0.75], k=nrows)
-        fnet['strength'] = 10 ** uniform(size=nrows, high=math.log10(100), low=math.log10(1))
+        fnet['strength'] = 10 ** uniform(size=nrows, high=2, low=1)
         fnet['hill'] = truncnorm.rvs(1, 10, loc=2, scale=2, size=nrows)
+        
         self.feature_network = fnet
     
     def calc_dissociation(self):
+        tfs = self.feature_info.loc[self.feature_info.is_tf, 'feature_id'].values
         remove = ["max_premrna", "max_mrna", "max_protein", "dissociation", "k", "max_protein"]
         
         finfo, fnet = self.feature_info, self.feature_network
@@ -87,6 +92,8 @@ class Kinetics:
         fnet['dissociation'] = fnet['max_protein'] / 2
         fnet['feature_id'] = fnet['to']
         
+        
+        fnet.loc[~fnet['from'].isin(tfs), 'dissociation'] = fnet.loc[~fnet['from'].isin(tfs), 'max_protein'] * 1.5
         self.feature_info, self.feature_network = finfo, fnet
     
     def calc_basal_activity(self, network, basal_col="basal"):

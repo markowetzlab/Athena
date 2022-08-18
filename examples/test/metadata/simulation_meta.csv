@@ -1,0 +1,12 @@
+sim_name,grna,sample_percent,nsims
+CTRL-grna.1,CTRL-grna.1,1,10
+TF_0-grna.1,TF_0-grna.1,1,10
+TF_1-grna.1,TF_1-grna.1,1,10
+TF_2-grna.1,TF_2-grna.1,1,10
+TF_3-grna.1,TF_3-grna.1,1,10
+TF_4-grna.1,TF_4-grna.1,1,10
+TF_5-grna.1,TF_5-grna.1,1,10
+TF_6-grna.1,TF_6-grna.1,1,10
+TF_7-grna.1,TF_7-grna.1,1,10
+TF_8-grna.1,TF_8-grna.1,1,10
+TF_9-grna.1,TF_9-grna.1,1,10
