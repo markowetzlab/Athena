@@ -23,7 +23,7 @@ class HouseKeeping:
     
     def breadth_first_search(self):
         node_order =[]
-        nodes = self.tf_net.vs['name']
+        nodes = self.grn.vs['name']
         
         while len(node_order) <= self.num_hks:
             seed_node = random.sample(nodes, k=1)[0]

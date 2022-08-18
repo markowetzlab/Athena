@@ -52,8 +52,7 @@ class Kinetics:
         finfo['mrna_halflife'] = uniform(size=nrows,  high=5, low=2.5)
         finfo['protein_halflife'] = uniform(size=nrows, high=10, low=5)
         finfo['translation_rate'] = uniform(size=nrows, high=150, low=100)
-        finfo.loc[finfo.is_tf, 'transcription_rate'] = uniform(size=ntfs, high=20, low=10)
-        finfo.loc[~finfo.is_tf, 'transcription_rate'] = uniform(size=nehks, high=50, low=30)
+        finfo['transcription_rate'] = uniform(size=nrows, high=50, low=20)
         finfo['splicing_rate'] = math.log(2) / 2
         finfo['mrna_decay_rate'] = math.log(2) / self.feature_info['mrna_halflife']
         finfo['protein_decay_rate'] = math.log(2) / self.feature_info['protein_halflife']
@@ -89,11 +88,9 @@ class Kinetics:
         finfo["max_protein"] = finfo["translation_rate"] / finfo["protein_decay_rate"] * finfo["max_mrna"] 
         
         fnet = fnet.merge(finfo[['feature_id', 'max_protein']], left_on='from', right_on='feature_id', how='left')
-        fnet['dissociation'] = fnet['max_protein'] / 2
+        
         fnet['feature_id'] = fnet['to']
-        
-        
-        fnet.loc[~fnet['from'].isin(tfs), 'dissociation'] = fnet.loc[~fnet['from'].isin(tfs), 'max_protein'] * 1.5
+        fnet['dissociation'] = fnet['max_protein'] / 2
         self.feature_info, self.feature_network = finfo, fnet
     
     def calc_basal_activity(self, network, basal_col="basal"):
