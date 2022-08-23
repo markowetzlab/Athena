@@ -8,7 +8,7 @@ from multiprocessing import Pool, RLock
 from numpy.random import uniform, multinomial
 
 class Sampling:
-#     
+#     need to look into using target genes
     def sample(self, sim_meta=None, res_dir=None, ncells=10000, lambda_ls=0, cache=True, pop_fp=None, map_ls=True):
         
         if res_dir is None:

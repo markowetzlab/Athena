@@ -114,27 +114,29 @@ class GuideRNA:
         genes_to_add = []
         perturb_activity = 0
         info = self.feature_info
-        specifity_score = 1 - self.off_target
-        ngenes = random.sample([i for i in range(1, 11)], k=1)[0]
-        off_act = (1 - specifity_score) / specifity_score
-        genes = random.sample(list(info.loc[info.feature_id != target_gene,'feature_id'].values), k=ngenes)
         
-        for index, gene in enumerate(genes):
-            
-            if (index + 1) == ngenes:
-                perturb_activity = 1 - off_act
-            else:
-                perturb_activity = np.random.uniform(high=off_act, size=1)[0]
-                perturb_activity = round(perturb_activity, 2)
+        if self.off_target != 0:
+            specifity_score = 1 - self.off_target
+            ngenes = random.sample([i for i in range(1, 11)], k=1)[0]
+            off_act = (1 - specifity_score) / specifity_score
+            genes = random.sample(list(info.loc[info.feature_id != target_gene,'feature_id'].values), k=ngenes)
 
-                off_act = round(off_act - perturb_activity, 2)
-                perturb_activity = round(1 - perturb_activity, 2)
-            
-            if perturb_activity != 1:
-                genes_to_add.append({'grna': grna, 
-                                     'perturbed_gene': gene,
-                                     'on_target': perturb_activity,
-                                     'target': False})
+            for index, gene in enumerate(genes):
+
+                if (index + 1) == ngenes:
+                    perturb_activity = 1 - off_act
+                else:
+                    perturb_activity = np.random.uniform(high=off_act, size=1)[0]
+                    perturb_activity = round(perturb_activity, 2)
+
+                    off_act = round(off_act - perturb_activity, 2)
+                    perturb_activity = round(1 - perturb_activity, 2)
+
+                if perturb_activity != 1:
+                    genes_to_add.append({'grna': grna, 
+                                         'perturbed_gene': gene,
+                                         'on_target': perturb_activity,
+                                         'target': False})
         
         return genes_to_add
     
@@ -298,11 +300,11 @@ class GuideRNA:
     def check_target_scores(self, on_target, off_target):
         probs = self.grna_library.probability
         
-        if (not on_target is None) and (type(on_target) is float) and (on_target <= 1) and (on_target >= 0):
-            self.on_target = on_target
+        if (not on_target is None) and (on_target <= 1) and (on_target >= 0):
+            self.on_target = float(on_target)
         
-        if (not off_target is None) and (type(off_target) is float) and (off_target <= 1) and (off_target >= 0):
-            self.off_target = off_target
+        if (not off_target is None) and (off_target <= 1) and (off_target >= 0):
+            self.off_target = float(off_target)
                 
         if self.off_target is None:
             self.off_target = random.choices(self.grna_library.off_target, weights=probs, k=1)[0]

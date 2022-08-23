@@ -37,8 +37,6 @@ class Kinetics:
     def sample_rates(self):
         finfo = self.feature_info
         nrows = len(self.feature_info)
-        ntfs = len(finfo.loc[finfo.is_tf])
-        nehks = len(finfo.loc[~finfo.is_tf])
         nphospho = len(self.phosphorylated)
         finfo['transcription_rate'] = np.nan
         
@@ -51,8 +49,8 @@ class Kinetics:
         finfo['dephosphorylation_rate'] = 0
         finfo['mrna_halflife'] = uniform(size=nrows,  high=5, low=2.5)
         finfo['protein_halflife'] = uniform(size=nrows, high=10, low=5)
-        finfo['translation_rate'] = uniform(size=nrows, high=150, low=100)
         finfo['transcription_rate'] = uniform(size=nrows, high=50, low=20)
+        finfo['translation_rate'] = uniform(size=nrows, high=150, low=100)
         finfo['splicing_rate'] = math.log(2) / 2
         finfo['mrna_decay_rate'] = math.log(2) / self.feature_info['mrna_halflife']
         finfo['protein_decay_rate'] = math.log(2) / self.feature_info['protein_halflife']
