@@ -63,12 +63,12 @@ class Network(ModularSampling, GeneRegulatoryNetwork, HouseKeeping, SignallingCa
             print ("Created Network...", flush=True)
             
             if self.cache_network:
-                self.feature_info.to_parquet(os.path.join(self.metadata_dir,
-                                                          'feature_info.parquet'), 
-                                             compression='brotli')
-                self.feature_network.to_parquet(os.path.join(self.metadata_dir,
-                                                             'feature_network.parquet'), 
-                                                compression='brotli')
+                self.feature_info.to_csv(os.path.join(self.metadata_dir,
+                                                      'feature_info.csv.gz'),     
+                                         compression='gzip')
+                self.feature_network.to_csv(os.path.join(self.metadata_dir,
+                                                        'feature_network.csv.gz'), 
+                                            compression='gzip')
     
     def merge_networks(self, dfs):
         # get edgelist dataframe

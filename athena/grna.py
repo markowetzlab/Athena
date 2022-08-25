@@ -11,20 +11,31 @@ class GuideRNA:
         Issues with specificity score is not an one to one mapping in simulations as compared to real world data.
     """
     
-    def generate_grnas(self, crispr_type=None, on_target=None, off_target=None):
+    def generate_grnas(self, grna_meta=None, crispr_type=None, on_target=None, off_target=None):
         
         self.check_crispr_type(crispr_type)
         
-        self.get_target_genes()
-        self.check_target_scores(on_target, off_target)
-        ngrnas_seq = range(self.ngrnas_per_target)
-        ctrl_grnas = [f'{self.ctrl_label}-grna.{i + 1}' for i in ngrnas_seq]
-        gene_grnas = [f'{gene}-grna.{i + 1}' for gene in self.target_genes for i in ngrnas_seq]
-        
-        grna_names = ctrl_grnas + gene_grnas
-        self.ngrnas = len(grna_names)
-        
-        grna_meta = self.get_perturbed_genes(grna_names)
+        if grna_meta is None:
+            self.get_target_genes()
+            self.check_target_scores(on_target, off_target)
+            ngrnas_seq = range(self.ngrnas_per_target)
+            ctrl_grnas = [f'{self.ctrl_label}-grna.{i + 1}' for i in ngrnas_seq]
+            gene_grnas = [f'{gene}-grna.{i + 1}' for gene in self.target_genes for i in ngrnas_seq]
+
+            grna_names = ctrl_grnas + gene_grnas
+            ngrnas = len(grna_names)
+
+            grna_meta = self.get_perturbed_genes(grna_names)
+        else:
+            ngrnas = grna_meta.shape[0]
+            grna_names = list(grna_meta.grna.values)
+            on_target = grna_meta.on_target.unique()[0]
+            off_target = grna_meta.off_target.unique()[0]
+            grna_names = grna_names + [f'{self.ctrl_label}-grna']
+            
+            grna_meta = self.get_perturbed_genes(grna_names, on_target, off_target)
+            
+        self.ngrnas = ngrnas
         self.grna_meta = self.sample_on_target(grna_meta)
         
         if self.crispr_type == 'activation':
@@ -93,8 +104,11 @@ class GuideRNA:
                     self.cache_multiplier(multi, prev_batch)
                     multi, prev_batch = [], current_batch
         
-    def get_perturbed_genes(self, grna_names):
+    def get_perturbed_genes(self, grna_names, on_target=None, off_target=None):
         perturbed_genes = []
+        
+        if on_target is None:
+            on_target = self.on_target
         
         for grna in tqdm(grna_names):
             sampled_genes = []
@@ -104,19 +118,22 @@ class GuideRNA:
             else:
                 target_gene = grna.split('-grna')[0]
                 sampled_genes = self.sample_off_target(target_gene, grna)
-                sampled_genes.append({'grna': grna, 'perturbed_gene': target_gene, 'on_target': self.on_target, 'target': True})
+                sampled_genes.append({'grna': grna, 'perturbed_gene': target_gene, 'on_target': on_target, 'target': True})
             
             perturbed_genes = perturbed_genes + sampled_genes
         
         return perturbed_genes
     
-    def sample_off_target(self, target_gene, grna):
+    def sample_off_target(self, target_gene, grna, off_target=None):
         genes_to_add = []
         perturb_activity = 0
         info = self.feature_info
         
-        if self.off_target != 0:
-            specifity_score = 1 - self.off_target
+        if off_target is None:
+            off_target = self.off_target
+        
+        if off_target != 0:
+            specifity_score = 1 - off_target
             ngenes = random.sample([i for i in range(1, 11)], k=1)[0]
             off_act = (1 - specifity_score) / specifity_score
             genes = random.sample(list(info.loc[info.feature_id != target_gene,'feature_id'].values), k=ngenes)
