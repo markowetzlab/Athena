@@ -130,7 +130,9 @@ class Athena(Network, Kinetics, GuideRNA, CompileReactions, GillespieSSA, Sampli
                 
                 for file in os.listdir(dir_to_create):
                     fp = os.path.join(dir_to_create, file)
-                    os.remove(fp)
+                    
+                    if not os.path.isdir(fp):
+                        os.remove(fp)
                     
     def check_caches(self, cache_dir):
         self.cache_dir = cache_dir
