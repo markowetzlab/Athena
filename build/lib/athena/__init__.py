@@ -132,6 +132,26 @@ class Athena(Network, Kinetics, GuideRNA, CompileReactions, GillespieSSA, Sampli
                     fp = os.path.join(dir_to_create, file)
                     os.remove(fp)
                     
+#         if not os.path.exists(self.simulator_dir):
+#             os.mkdir(self.simulator_dir)
+#             os.mkdir(self.results_dir)
+#             os.mkdir(self.metadata_dir)
+#             os.mkdir(self.affinity_dir)
+#             os.mkdir(self.multiplier_dir)
+#             os.mkdir(self.propensity_dir)
+#             os.mkdir(self.change_vec_dir)
+#             os.mkdir(self.regulators_dir)
+#             os.mkdir(self.species_vec_dir)
+            
+#         else:
+#             for root, dirs, files in os.walk(self.simulator_dir):
+                
+#                 if os.path.exists(self.metadata_dir) and root == self.metadata_dir:
+#                     continue
+                
+#                 for file in files:
+#                     os.remove(os.path.join(root, file))
+                    
     def check_caches(self, cache_dir):
         self.cache_dir = cache_dir
         self.grn_dir = os.path.join(cache_dir, self.grn_dir)
